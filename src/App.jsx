@@ -4,7 +4,7 @@ import { compressAndUpload } from './utils/compressor';
 import { 
   BookOpen, FileText, LogOut, Check, UserCheck, 
   Search, Edit3, Image as ImageIcon, Users, RefreshCw,
-  Plus, Trash, Edit, Save, X, Download, Eye, Printer
+  Plus, Trash, Edit, Save, X, Download, Eye, Printer, ChevronDown, ChevronUp, Settings
 } from 'lucide-react';
 
 function App() {
@@ -16,12 +16,13 @@ function App() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
 
-  // Profil Guru
+  // Profil Guru & State Dropdown Auto-Hide
   const [profile, setProfile] = useState({ 
     full_name: localStorage.getItem('teacher_name') || '', 
     nip: localStorage.getItem('teacher_nip') || '', 
     signature_url: localStorage.getItem('teacher_sig') || '' 
   });
+  const [isProfileOpen, setIsProfileOpen] = useState(false); // Default Hide Accordion Profil
 
   // Form State Jurnal
   const [selectedClass, setSelectedClass] = useState('7');
@@ -55,7 +56,7 @@ function App() {
   // History Jurnal
   const [journalsHistory, setJournalsHistory] = useState([]);
 
-  // 🔥 LOGIKA MAPEL KETAT - TAB JURNAL
+  // LOGIKA MAPEL KETAT - TAB JURNAL
   useEffect(() => {
     if (selectedClass === '7') {
       setSelectedSubject('Matematika');
@@ -68,7 +69,7 @@ function App() {
     }
   }, [selectedClass]);
 
-  // 🔥 LOGIKA MAPEL KETAT - TAB PROFIL / REKAP LAPORAN
+  // LOGIKA MAPEL KETAT - TAB PROFIL / REKAP LAPORAN
   useEffect(() => {
     if (reportClass === '7') {
       setReportSubject('Matematika');
@@ -283,11 +284,12 @@ function App() {
     setLoading(false);
   };
 
-  // PREPARE PREVIEW CETAK
-  const handleOpenPrintPreview = (title, subtitle, rows) => {
+  // 🔥 PREPARE PREVIEW CETAK (JABATAN TTD MENYESUAIKAN MAPEL)
+  const handleOpenPrintPreview = (title, subtitle, subjectName, rows) => {
     setPreviewData({
       title,
       subtitle,
+      subjectRole: `Guru Mata Pelajaran ${subjectName}`, // Dinamis mengikuti Mapel
       rows,
       teacherName: profile.full_name || 'NUR ALFI SYAHRI, S.P.',
       teacherNip: profile.nip || '-------------------',
@@ -617,6 +619,7 @@ function App() {
                             onClick={() => handleOpenPrintPreview(
                               `REKAP PRESENSI SISWA`,
                               `Nama: ${student.name} | Kelas: ${student.class_name}`,
+                              `Kelas ${student.class_name}`,
                               [[1, new Date().toLocaleDateString('id-ID'), 'Hadir (Default)', '-']]
                             )} 
                             title="Preview PDF Siswa"
@@ -643,6 +646,7 @@ function App() {
         {/* TAB 4: PROFIL GURU & EXPORT REKAP PERIODIK */}
         {activeTab === 'profile' && (
           <div className="space-y-4">
+            {/* CARD 1: EXPORT LAPORAN */}
             <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-3">
               <h3 className="font-extrabold text-slate-800 text-sm border-b pb-2">Opsi Filter Rekap Laporan PDF</h3>
               
@@ -676,7 +680,6 @@ function App() {
                 </div>
               </div>
 
-              {/* 🔥 FIX: DROPDOWN MAPEL DI TAB PROFIL BISA DIPILIH SPESIFIK */}
               <div>
                 <label className="text-xs font-bold text-slate-500 block mb-1">Mata Pelajaran Laporan</label>
                 <select 
@@ -716,6 +719,7 @@ function App() {
                   handleOpenPrintPreview(
                     `REKAPITULASI PRESENSI & NILAI SISWA (${reportPeriod.toUpperCase()})`,
                     `SMPN 1 Damai  |  Kelas: ${reportClass}  |  Mata Pelajaran: ${reportSubject}`,
+                    reportSubject, // Mengirim nama Mapel dinamis untuk TTD
                     rows
                   );
                 }}
@@ -726,50 +730,66 @@ function App() {
               </button>
             </div>
 
-            <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-3">
-              <h3 className="font-extrabold text-slate-800 text-sm border-b pb-2">Profil & TTD Digital Permanen</h3>
-              
-              <div>
-                <label className="text-xs font-bold text-slate-500 block mb-1">Nama Lengkap Guru</label>
-                <input 
-                  type="text" className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold"
-                  placeholder="Masukkan Nama Lengkap & Gelar..."
-                  value={profile.full_name || ''} 
-                  onChange={e => setProfile({...profile, full_name: e.target.value})}
-                />
-              </div>
-
-              <div>
-                <label className="text-xs font-bold text-slate-500 block mb-1">NIP Guru</label>
-                <input 
-                  type="text" className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold"
-                  placeholder="Masukkan NIP Kamu..."
-                  value={profile.nip || ''} 
-                  onChange={e => setProfile({...profile, nip: e.target.value})}
-                />
-              </div>
-
-              <div>
-                <label className="text-xs font-bold text-slate-500 block mb-1">Upload File Gambar TTD (PNG/JPG)</label>
-                <input 
-                  type="file" accept="image/*" 
-                  onChange={handleSignatureUpload} 
-                  className="w-full text-xs text-slate-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-blue-50 file:text-blue-600" 
-                />
-                {profile.signature_url && (
-                  <div className="mt-2 p-2 bg-slate-50 rounded-xl border border-slate-200 text-center">
-                    <p className="text-[10px] font-bold text-slate-400 mb-1">Preview TTD Tersimpan:</p>
-                    <img src={profile.signature_url} alt="TTD Guru" className="h-16 mx-auto object-contain" />
-                  </div>
-                )}
-              </div>
-
+            {/* 🔥 CARD 2: PROFIL & TTD PERMANEN (DROPDOWN AUTO-HIDE / COLLAPSIBLE) */}
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden transition-all">
+              {/* Header Toggle Accordion */}
               <button 
-                onClick={handleSaveProfile} disabled={loading}
-                className="w-full bg-slate-800 hover:bg-slate-900 text-white py-3 rounded-xl font-bold text-xs shadow transition-all"
+                onClick={() => setIsProfileOpen(!isProfileOpen)}
+                className="w-full p-4 flex justify-between items-center bg-slate-50/80 hover:bg-slate-100 transition-colors"
               >
-                {loading ? 'Menyimpan...' : 'Simpan Profil Permanen ke Database'}
+                <div className="flex items-center space-x-2">
+                  <Settings className="w-4 h-4 text-blue-600" />
+                  <h3 className="font-extrabold text-slate-800 text-xs">Profil & TTD Digital Permanen</h3>
+                </div>
+                {isProfileOpen ? <ChevronUp className="w-4 h-4 text-slate-500" /> : <ChevronDown className="w-4 h-4 text-slate-500" />}
               </button>
+
+              {/* Isi Form Profil (Sembunyi/Auto-Hide jika isProfileOpen false) */}
+              {isProfileOpen && (
+                <div className="p-4 border-t border-slate-100 space-y-3 bg-white">
+                  <div>
+                    <label className="text-xs font-bold text-slate-500 block mb-1">Nama Lengkap Guru</label>
+                    <input 
+                      type="text" className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold"
+                      placeholder="Masukkan Nama Lengkap & Gelar..."
+                      value={profile.full_name || ''} 
+                      onChange={e => setProfile({...profile, full_name: e.target.value})}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-bold text-slate-500 block mb-1">NIP Guru</label>
+                    <input 
+                      type="text" className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold"
+                      placeholder="Masukkan NIP Kamu..."
+                      value={profile.nip || ''} 
+                      onChange={e => setProfile({...profile, nip: e.target.value})}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-bold text-slate-500 block mb-1">Upload File Gambar TTD (PNG/JPG)</label>
+                    <input 
+                      type="file" accept="image/*" 
+                      onChange={handleSignatureUpload} 
+                      className="w-full text-xs text-slate-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-blue-50 file:text-blue-600" 
+                    />
+                    {profile.signature_url && (
+                      <div className="mt-2 p-2 bg-slate-50 rounded-xl border border-slate-200 text-center">
+                        <p className="text-[10px] font-bold text-slate-400 mb-1">Preview TTD Tersimpan:</p>
+                        <img src={profile.signature_url} alt="TTD Guru" className="h-16 mx-auto object-contain" />
+                      </div>
+                    )}
+                  </div>
+
+                  <button 
+                    onClick={handleSaveProfile} disabled={loading}
+                    className="w-full bg-slate-800 hover:bg-slate-900 text-white py-3 rounded-xl font-bold text-xs shadow transition-all"
+                  >
+                    {loading ? 'Menyimpan...' : 'Simpan Profil Permanen ke Database'}
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -858,11 +878,12 @@ function App() {
               </tbody>
             </table>
 
-            {/* Area TTD Guru */}
+            {/* Area TTD Guru (Dinamis Menyesuaikan Mapel) */}
             <div className="mt-4 flex justify-end">
-              <div className="w-48 text-left text-[8.5pt]">
+              <div className="w-52 text-left text-[8.5pt]">
                 <p>Damai, {new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
-                <p className="font-normal mb-1">Guru Mata Pelajaran,</p>
+                {/* 🔥 Disesuaikan dengan Mapel Laporan */}
+                <p className="font-normal mb-1">{previewData.subjectRole},</p>
                 
                 <div className="h-12 my-1 flex items-center justify-start">
                   {previewData.signatureUrl ? (
