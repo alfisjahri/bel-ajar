@@ -35,7 +35,7 @@ function App() {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
 
   // Form State Jurnal
-  const [journalDate, setStartDateJournal] = useState(new Date().toISOString().split('T')[0]); // Default Hari Ini
+  const [journalDate, setStartDateJournal] = useState(new Date().toISOString().split('T')[0]);
   const [selectedClass, setSelectedClass] = useState('7');
   const [selectedSubject, setSelectedSubject] = useState('Matematika');
   const [material, setMaterial] = useState('');
@@ -64,9 +64,10 @@ function App() {
   const [newStudent, setNewStudent] = useState({ name: '', class_name: '7' });
   const [editingStudent, setEditingStudent] = useState(null);
 
-  // History Jurnal (Tab Review)
+  // History Jurnal (Tab Review) & State Edit Jurnal
   const [journalsHistory, setJournalsHistory] = useState([]);
   const [fetchingHistory, setFetchingHistory] = useState(false);
+  const [editingJournal, setEditingJournal] = useState(null); // State Edit Jurnal
 
   // LOGIKA MAPEL KETAT
   useEffect(() => {
@@ -99,7 +100,7 @@ function App() {
     return () => subscription.unsubscribe();
   }, []);
 
-  // Fetch Riwayat Jurnal untuk Tab Review
+  // Fetch Riwayat Jurnal
   const fetchJournalsHistory = async () => {
     if (isDemo) return;
     setFetchingHistory(true);
@@ -118,6 +119,43 @@ function App() {
     if (activeTab === 'edit') fetchJournalsHistory();
     if (activeTab === 'siswa') fetchAllStudents();
   }, [activeTab]);
+
+  // HAPUS JURNAL
+  const handleDeleteJournal = async (journalId) => {
+    if (!window.confirm('Yakin ingin menghapus jurnal ini? Data presensi terkait juga akan terhapus.')) return;
+
+    // Hapus presensi & nilai terkait terlebih dahulu
+    await supabase.from('attendance').delete().eq('journal_id', journalId);
+    await supabase.from('grades').delete().eq('journal_id', journalId);
+    
+    // Hapus jurnal
+    const { error } = await supabase.from('journals').delete().eq('id', journalId);
+
+    if (!error) {
+      showToast('Jurnal berhasil dihapus!');
+      fetchJournalsHistory();
+    } else {
+      showToast('Gagal menghapus jurnal: ' + error.message, 'error');
+    }
+  };
+
+  // UPDATE MATERI JURNAL
+  const handleUpdateJournal = async (journalId) => {
+    if (!editingJournal.material.trim()) return showToast('Materi tidak boleh kosong!', 'error');
+
+    const { error } = await supabase
+      .from('journals')
+      .update({ material: editingJournal.material })
+      .eq('id', journalId);
+
+    if (!error) {
+      showToast('Jurnal berhasil diperbarui!');
+      setEditingJournal(null);
+      fetchJournalsHistory();
+    } else {
+      showToast('Gagal memperbarui jurnal: ' + error.message, 'error');
+    }
+  };
 
   const fetchProfile = async (userId) => {
     try {
@@ -159,7 +197,6 @@ function App() {
     }
   };
 
-  // UPLOAD TTD BASE64
   const handleSignatureUpload = (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -213,7 +250,6 @@ function App() {
     if (data) setAllStudents(data);
   };
 
-  // CRUD SISWA
   const handleAddStudent = async (e) => {
     e.preventDefault();
     if (!newStudent.name.trim()) return;
@@ -268,7 +304,6 @@ function App() {
     setAttendance(att);
   };
 
-  // SIMPAN JURNAL
   const handleSubmitJurnal = async () => {
     if (isDemo) return showToast('Mode Demo: Data tidak tersimpan.', 'error');
     if (!material.trim()) return showToast('Isi materi pembelajaran terlebih dahulu!', 'error');
@@ -313,7 +348,6 @@ function App() {
     setLoading(false);
   };
 
-  // CETAK INDIVIDUAL SISWA (REKAP PRESENSI H/S/I/A)
   const handleExportIndividualPDF = async (student) => {
     let studentAtt = [];
     if (!isDemo) {
@@ -325,7 +359,6 @@ function App() {
       if (data) studentAtt = data;
     }
 
-    // Hitung Total H / S / I / A
     const summary = { H: 0, S: 0, I: 0, A: 0 };
     studentAtt.forEach(a => {
       if (a.status === 'Hadir') summary.H++;
@@ -346,7 +379,7 @@ function App() {
       subtitle: `Nama: ${student.name} | Kelas: ${student.class_name}`,
       subjectRole: `Guru Mata Pelajaran Kelas ${student.class_name}`,
       isIndividual: true,
-      summary, // Data H/S/I/A
+      summary,
       rows: rows.length > 0 ? rows : [],
       teacherName: profile.full_name || 'NUR ALFI SYAHRI, S.P.',
       teacherNip: profile.nip || '-------------------',
@@ -355,7 +388,6 @@ function App() {
     setShowPreviewModal(true);
   };
 
-  // PREPARE PREVIEW CETAK REKAP KELAS
   const handleOpenPrintPreview = (title, subtitle, subjectName, rows) => {
     setPreviewData({
       title,
@@ -370,11 +402,9 @@ function App() {
     setShowPreviewModal(true);
   };
 
-  // LOGIN DENGAN PROTEKSI MAX 3 KALI LOCKOUT 24 JAM
   const handleLogin = async (e) => {
     e.preventDefault();
 
-    // Cek Lockout
     if (lockoutUntil) {
       const lockTime = new Date(lockoutUntil).getTime();
       const now = new Date().getTime();
@@ -479,7 +509,7 @@ function App() {
   return (
     <div className="min-h-screen bg-slate-100 pb-24 max-w-md mx-auto relative shadow-2xl border-x border-slate-200 font-sans">
       
-      {/* FLOATING CUSTOM TOAST ALERT */}
+      {/* Custom Toast Alert */}
       {toast.show && (
         <div className={`fixed top-4 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 rounded-2xl shadow-xl border flex items-center space-x-2 text-xs font-bold transition-all animate-bounce ${
           toast.type === 'error' ? 'bg-red-500 text-white border-red-600' : 'bg-slate-900 text-white border-slate-800'
@@ -520,8 +550,6 @@ function App() {
         {activeTab === 'input' && (
           <div className="space-y-4">
             <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm space-y-3">
-              
-              {/* OPSI TANGGAL JURNAL (DEFAULT HARI INI) */}
               <div>
                 <label className="text-xs font-bold text-slate-500 block mb-1">Tanggal Mengajar</label>
                 <input 
@@ -574,7 +602,6 @@ function App() {
                 />
               </div>
 
-              {/* UPLOAD FOTO BEBAS (DARI GALERI/KAMERA) */}
               <div>
                 <label className="text-xs font-bold text-slate-500 block mb-1">Foto Dokumentasi (Galeri / Kamera)</label>
                 <input 
@@ -585,7 +612,7 @@ function App() {
               </div>
             </div>
 
-            {/* PRESENSI RADIO BUTTON CARD (H / S / I / A) */}
+            {/* Presensi Siswa */}
             <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm space-y-3">
               <div className="flex justify-between items-center border-b pb-2">
                 <div className="flex items-center space-x-2">
@@ -652,7 +679,7 @@ function App() {
           </div>
         )}
 
-        {/* TAB 2: REVIEW JURNAL (MUNCULKAN HISTORY REAL) */}
+        {/* 🔥 TAB 2: REVIEW JURNAL (LENGKAP EDIT & HAPUS JURNAL) */}
         {activeTab === 'edit' && (
           <div className="space-y-4">
             <div className="flex justify-between items-center">
@@ -670,10 +697,46 @@ function App() {
                       <span className="text-[10px] font-bold bg-blue-100 text-blue-700 px-2 py-0.5 rounded-md mr-1">Kelas {j.class_name}</span>
                       <span className="text-[10px] font-bold bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-md">{j.subject}</span>
                     </div>
-                    <span className="text-[10px] text-slate-400 font-semibold">{new Date(j.created_at).toLocaleDateString('id-ID')}</span>
+                    
+                    <div className="flex items-center space-x-2">
+                      <span className="text-[10px] text-slate-400 font-semibold">{new Date(j.created_at).toLocaleDateString('id-ID')}</span>
+                      
+                      {/* 🔥 TOMBOL EDIT & HAPUS JURNAL */}
+                      <button 
+                        onClick={() => setEditingJournal(editingJournal?.id === j.id ? null : { id: j.id, material: j.material })}
+                        className="text-slate-500 hover:text-blue-600 p-1"
+                        title="Edit Jurnal"
+                      >
+                        <Edit className="w-3.5 h-3.5" />
+                      </button>
+                      
+                      <button 
+                        onClick={() => handleDeleteJournal(j.id)}
+                        className="text-slate-400 hover:text-red-600 p-1"
+                        title="Hapus Jurnal"
+                      >
+                        <Trash className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   </div>
-                  <p className="text-xs text-slate-700 font-semibold">{j.material}</p>
-                  
+
+                  {/* Mode Edit vs View Materi */}
+                  {editingJournal?.id === j.id ? (
+                    <div className="space-y-2 pt-1">
+                      <textarea 
+                        className="w-full p-2 bg-slate-50 border rounded-xl text-xs font-semibold"
+                        value={editingJournal.material}
+                        onChange={e => setEditingJournal({...editingJournal, material: e.target.value})}
+                      />
+                      <div className="flex gap-2">
+                        <button onClick={() => handleUpdateJournal(j.id)} className="bg-emerald-600 text-white text-[11px] font-bold px-3 py-1 rounded-lg">Simpan</button>
+                        <button onClick={() => setEditingJournal(null)} className="bg-slate-200 text-slate-700 text-[11px] font-bold px-3 py-1 rounded-lg">Batal</button>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-slate-700 font-semibold">{j.material}</p>
+                  )}
+
                   {j.photos && j.photos.length > 0 && (
                     <div className="flex gap-2 pt-1 overflow-x-auto">
                       {j.photos.map((url, i) => (
@@ -1023,7 +1086,6 @@ function App() {
               {previewData.subtitle && <p className="text-[9pt] text-slate-700 font-sans mt-0.5">{previewData.subtitle}</p>}
             </div>
 
-            {/* RINGKASAN H/S/I/A APABILA LAPORAN INDIVIDUAL SISWA */}
             {previewData.isIndividual && previewData.summary && (
               <div className="mb-3 font-sans text-[8.5pt] bg-slate-50 p-2 rounded-lg border border-slate-300 flex justify-around font-bold">
                 <span className="text-emerald-700">Hadir (H): {previewData.summary.H}</span>
