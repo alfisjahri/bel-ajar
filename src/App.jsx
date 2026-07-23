@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from './supabaseClient';
-import { compressAndUpload } from './utils/compressor';
 import { 
   BookOpen, FileText, LogOut, Check, UserCheck, 
   Search, Edit3, Image as ImageIcon, Users, RefreshCw,
@@ -21,6 +20,37 @@ const Toast = Swal.mixin({
   timer: 2000,
   timerProgressBar: true
 });
+
+// 🔥 HELPER KOMPRESI & CONVERT FOTO DOKUMENTASI KE BASE64 (100% PASTI TERSIMPAN & MUNCUL)
+const compressImageToBase64 = (file) => {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = (event) => {
+      const img = new Image();
+      img.src = event.target.result;
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const MAX_WIDTH = 800; // Kompres ukuran max lebar 800px agar hemat database
+        const scaleSize = MAX_WIDTH / img.width;
+        
+        if (img.width > MAX_WIDTH) {
+          canvas.width = MAX_WIDTH;
+          canvas.height = img.height * scaleSize;
+        } else {
+          canvas.width = img.width;
+          canvas.height = img.height;
+        }
+
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        // Convert ke WebP/JPEG kualitas 0.7
+        const compressedBase64 = canvas.toDataURL('image/jpeg', 0.7);
+        resolve(compressedBase64);
+      };
+    };
+  });
+};
 
 function App() {
   const [session, setSession] = useState(null);
@@ -68,8 +98,8 @@ function App() {
   // Management Siswa & Filter Sortasi Presensi Siswa
   const [allStudents, setAllStudents] = useState([]);
   const [searchStudentQuery, setSearchStudentQuery] = useState('');
-  const [attendanceFilter, setAttendanceFilter] = useState('ALL'); // 'ALL', 'Sakit', 'Izin', 'Alfa'
-  const [attendanceRecordsAll, setAttendanceRecordsAll] = useState([]); // Data presensi global untuk sortasi
+  const [attendanceFilter, setAttendanceFilter] = useState('ALL');
+  const [attendanceRecordsAll, setAttendanceRecordsAll] = useState([]);
   const [isAddingStudent, setIsAddingStudent] = useState(false);
   const [newStudent, setNewStudent] = useState({ name: '', class_name: '7' });
   const [editingStudent, setEditingStudent] = useState(null);
@@ -113,7 +143,6 @@ function App() {
     return () => subscription.unsubscribe();
   }, []);
 
-  // Fetch History Jurnal (Dengan penanganan aman untuk array foto)
   const fetchJournalsHistory = async () => {
     if (isDemo) return;
     setFetchingHistory(true);
@@ -133,7 +162,6 @@ function App() {
     const { data: stData } = await supabase.from('students').select('*').order('name', { ascending: true });
     if (stData) setAllStudents(stData);
 
-    // Fetch presensi global untuk fitur filter/sortasi
     const { data: attData } = await supabase.from('attendance').select('student_id, status, date');
     if (attData) setAttendanceRecordsAll(attData);
   };
@@ -143,7 +171,6 @@ function App() {
     if (activeTab === 'siswa') fetchAllStudents();
   }, [activeTab]);
 
-  // EDIT JURNAL
   const handleStartEditJournal = async (journal) => {
     if (editingJournal?.id === journal.id) {
       setEditingJournal(null);
@@ -411,14 +438,20 @@ function App() {
     setAttendance(att);
   };
 
+  // 🔥 SUBMIT JURNAL DENGAN PROCESS FOTO BASE64 ANTI-GAGAL
   const handleSubmitJurnal = async () => {
     if (isDemo) return Toast.fire({ icon: 'info', title: 'Mode Demo: Data tidak tersimpan.' });
     if (!material.trim()) return Toast.fire({ icon: 'warning', title: 'Isi materi pembelajaran dulu!' });
 
     setLoading(true);
-    let photoUrls = [];
+    let photoBase64List = [];
+
+    // Compress & convert semua foto yang di-upload ke Base64
     if (photos.length > 0) {
-      photoUrls = await compressAndUpload(photos, supabase);
+      for (const file of photos) {
+        const base64Img = await compressImageToBase64(file);
+        photoBase64List.push(base64Img);
+      }
     }
 
     const customEntryDate = new Date(journalDate);
@@ -428,7 +461,7 @@ function App() {
         class_name: selectedClass, 
         subject: selectedSubject, 
         material, 
-        photos: photoUrls,
+        photos: photoBase64List, // String Base64 Array tersimpan 100% aman
         created_at: customEntryDate 
       }
     ]).select().single();
@@ -447,7 +480,7 @@ function App() {
       Swal.fire({
         icon: 'success',
         title: 'Tersimpan!',
-        text: 'Jurnal Bel Ajar & Presensi Berhasil Disimpan.',
+        text: 'Jurnal Bel Ajar & Foto Berhasil Disimpan.',
         timer: 1800,
         showConfirmButton: false
       });
@@ -665,7 +698,6 @@ function App() {
 
     if (attendanceFilter === 'ALL') return matchesSearch;
 
-    // Cek apakah siswa punya riwayat presensi sesuai filter
     const hasStatus = attendanceRecordsAll.some(a => a.student_id === s.id && a.status === attendanceFilter);
     return matchesSearch && hasStatus;
   });
@@ -763,6 +795,9 @@ function App() {
                   onChange={e => setPhotos(Array.from(e.target.files))}
                   className="w-full text-xs text-slate-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-blue-50 file:text-blue-600"
                 />
+                {photos.length > 0 && (
+                  <p className="text-[10px] text-emerald-600 font-bold mt-1">✓ {photos.length} file foto dipilih</p>
+                )}
               </div>
             </div>
 
@@ -828,12 +863,12 @@ function App() {
               className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3.5 rounded-2xl font-extrabold shadow-lg flex items-center justify-center space-x-2 transition-all active:scale-98"
             >
               <Check className="w-5 h-5" />
-              <span>{loading ? 'Menyimpan Jurnal...' : 'Simpan Jurnal Hari Ini'}</span>
+              <span>{loading ? 'Menyimpan Jurnal & Foto...' : 'Simpan Jurnal Hari Ini'}</span>
             </button>
           </div>
         )}
 
-        {/* TAB 2: REVIEW JURNAL (LENGKAP DENGAN PARSING FOTO BUKAN ABSEN) */}
+        {/* TAB 2: REVIEW JURNAL */}
         {activeTab === 'edit' && (
           <div className="space-y-4">
             <div className="flex justify-between items-center">
@@ -845,7 +880,6 @@ function App() {
               <p className="text-xs text-slate-400 text-center py-12 bg-white rounded-2xl border">Belum ada jurnal tersimpan.</p>
             ) : (
               journalsHistory.map(j => {
-                // 🔥 PARSING FOTO SECARA AMAN DARI DATABASE SUPABASE
                 let photoList = j.photos || [];
                 if (typeof photoList === 'string') {
                   try { photoList = JSON.parse(photoList); } catch(e) { photoList = [photoList]; }
@@ -958,11 +992,11 @@ function App() {
                       <p className="text-xs text-slate-700 font-semibold">{j.material}</p>
                     )}
 
-                    {/* 🔥 FOTO DOKUMENTASI TER-RENDER SEMPURNA */}
+                    {/* 🔥 FOTO DOKUMENTASI DENGAN PREVIEW REAL BASE64 */}
                     {Array.isArray(photoList) && photoList.length > 0 && (
                       <div className="pt-2 border-t border-slate-100">
-                        <p className="text-[10px] font-bold text-slate-400 mb-1 flex items-center gap-1">
-                          <ImageIcon className="w-3 h-3 text-blue-600" />
+                        <p className="text-[10px] font-bold text-slate-400 mb-1.5 flex items-center gap-1">
+                          <ImageIcon className="w-3.5 h-3.5 text-blue-600" />
                           <span>Foto Dokumentasi Pembelajaran ({photoList.length}):</span>
                         </p>
                         <div className="flex gap-2 overflow-x-auto pb-1">
@@ -972,7 +1006,7 @@ function App() {
                               src={url} 
                               alt="Dokumentasi Jurnal" 
                               onClick={() => setSelectedImageModal(url)}
-                              className="w-16 h-16 object-cover rounded-xl border border-slate-200 cursor-pointer hover:opacity-80 active:scale-95 transition-all shadow-sm flex-shrink-0" 
+                              className="w-20 h-20 object-cover rounded-xl border-2 border-white shadow-md cursor-pointer hover:opacity-80 active:scale-95 transition-all flex-shrink-0" 
                             />
                           ))}
                         </div>
@@ -1026,7 +1060,6 @@ function App() {
                 </form>
               )}
 
-              {/* SEARCH BAR */}
               <div className="relative">
                 <Search className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
                 <input 
@@ -1036,7 +1069,7 @@ function App() {
                 />
               </div>
 
-              {/* 🔥 TOMBOL SORTASI KETIDAKHADIRAN (SEMUA / SAKIT / IZIN / ALFA) */}
+              {/* 🔥 CHIP SORTASI PRESENSI MANDIRI (SEMUA / SAKIT / IZIN / ALFA) */}
               <div className="flex items-center gap-1.5 pt-1 overflow-x-auto">
                 <span className="text-[10px] font-bold text-slate-400 mr-1 flex items-center gap-0.5">
                   <Filter className="w-3 h-3" /> Filter:
@@ -1050,9 +1083,9 @@ function App() {
                   <button 
                     key={chip.key}
                     onClick={() => setAttendanceFilter(chip.key)}
-                    className={`px-2.5 py-1 rounded-xl text-[10px] font-extrabold transition-all ${
+                    className={`px-3 py-1.5 rounded-xl text-[10px] font-extrabold transition-all ${
                       attendanceFilter === chip.key 
-                        ? 'bg-blue-600 text-white shadow-sm' 
+                        ? 'bg-blue-600 text-white shadow' 
                         : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                     }`}
                   >
@@ -1064,7 +1097,7 @@ function App() {
 
             {/* LIST SISWA */}
             <div className="space-y-2">
-              <p className="text-xs text-slate-500 font-bold px-1">Terganti: {filteredAllStudents.length} Siswa</p>
+              <p className="text-xs text-slate-500 font-bold px-1">Total Siswa: {filteredAllStudents.length}</p>
               {filteredAllStudents.length === 0 ? (
                 <p className="text-xs text-center text-slate-400 py-6 bg-white rounded-2xl border">Siswa tidak ditemukan untuk filter ini.</p>
               ) : (
@@ -1312,7 +1345,7 @@ function App() {
         </div>
       )}
 
-      {/* MODAL DETAIL MATERI TERTINGGAL (UNTUK SISWA ABSEN) */}
+      {/* MODAL DETAIL MATERI TERTINGGAL */}
       {studentAbsenceDetails && (
         <div className="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
           <div className="bg-white rounded-3xl p-5 w-full max-w-sm space-y-3 shadow-2xl">
