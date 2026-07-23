@@ -4,7 +4,8 @@ import { compressAndUpload } from './utils/compressor';
 import { 
   BookOpen, FileText, LogOut, Check, UserCheck, 
   Search, Edit3, Image as ImageIcon, Users, RefreshCw,
-  Plus, Trash, Edit, Save, X, Download, Eye, Printer, ChevronDown, ChevronUp, Settings
+  Plus, Trash, Edit, Save, X, Download, Eye, Printer, 
+  ChevronDown, ChevronUp, Settings, Calendar, ShieldAlert, CheckCircle, AlertTriangle
 } from 'lucide-react';
 
 function App() {
@@ -12,11 +13,20 @@ function App() {
   const [isDemo, setIsDemo] = useState(false);
   const [activeTab, setActiveTab] = useState('input');
   
-  // Auth Form
+  // Custom Alert Toast State
+  const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
+  const showToast = (message, type = 'success') => {
+    setToast({ show: true, message, type });
+    setTimeout(() => setToast({ show: false, message: '', type: 'success' }), 3500);
+  };
+
+  // Auth & Lockout State (Max 3x Coba)
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [loginAttempts, setLoginAttempts] = useState(() => parseInt(localStorage.getItem('login_attempts') || '0'));
+  const [lockoutUntil, setLockoutUntil] = useState(() => localStorage.getItem('lockout_until') || null);
 
-  // Profil Guru & State Dropdown Auto-Hide
+  // Profil Guru
   const [profile, setProfile] = useState({ 
     full_name: localStorage.getItem('teacher_name') || '', 
     nip: localStorage.getItem('teacher_nip') || '', 
@@ -25,6 +35,7 @@ function App() {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
 
   // Form State Jurnal
+  const [journalDate, setStartDateJournal] = useState(new Date().toISOString().split('T')[0]); // Default Hari Ini
   const [selectedClass, setSelectedClass] = useState('7');
   const [selectedSubject, setSelectedSubject] = useState('Matematika');
   const [material, setMaterial] = useState('');
@@ -35,12 +46,12 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [fetchingStudents, setFetchingStudents] = useState(false);
 
-  // Filter Rekap Laporan & Mapel Laporan
+  // Filter Rekap Laporan
   const [reportPeriod, setReportPeriod] = useState('bulanan');
   const [reportClass, setReportClass] = useState('7');
   const [reportSubject, setReportSubject] = useState('Matematika');
-  const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
-  const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
+  const [startDate, setStartDateFilter] = useState(new Date().toISOString().split('T')[0]);
+  const [endDate, setEndDateFilter] = useState(new Date().toISOString().split('T')[0]);
 
   // Modal Print Preview State
   const [showPreviewModal, setShowPreviewModal] = useState(false);
@@ -53,32 +64,24 @@ function App() {
   const [newStudent, setNewStudent] = useState({ name: '', class_name: '7' });
   const [editingStudent, setEditingStudent] = useState(null);
 
-  // History Jurnal
+  // History Jurnal (Tab Review)
   const [journalsHistory, setJournalsHistory] = useState([]);
+  const [fetchingHistory, setFetchingHistory] = useState(false);
 
-  // LOGIKA MAPEL KETAT - TAB JURNAL
+  // LOGIKA MAPEL KETAT
   useEffect(() => {
-    if (selectedClass === '7') {
-      setSelectedSubject('Matematika');
-    } else if (selectedClass === '9A' || selectedClass === '9B') {
-      setSelectedSubject('Koding');
-    } else if (selectedClass === '8A' || selectedClass === '8B') {
-      if (selectedSubject !== 'Matematika' && selectedSubject !== 'Koding') {
-        setSelectedSubject('Matematika');
-      }
+    if (selectedClass === '7') setSelectedSubject('Matematika');
+    else if (selectedClass === '9A' || selectedClass === '9B') setSelectedSubject('Koding');
+    else if (selectedClass === '8A' || selectedClass === '8B') {
+      if (selectedSubject !== 'Matematika' && selectedSubject !== 'Koding') setSelectedSubject('Matematika');
     }
   }, [selectedClass]);
 
-  // LOGIKA MAPEL KETAT - TAB PROFIL / REKAP LAPORAN
   useEffect(() => {
-    if (reportClass === '7') {
-      setReportSubject('Matematika');
-    } else if (reportClass === '9A' || reportClass === '9B') {
-      setReportSubject('Koding');
-    } else if (reportClass === '8A' || reportClass === '8B') {
-      if (reportSubject !== 'Matematika' && reportSubject !== 'Koding') {
-        setReportSubject('Matematika');
-      }
+    if (reportClass === '7') setReportSubject('Matematika');
+    else if (reportClass === '9A' || reportClass === '9B') setReportSubject('Koding');
+    else if (reportClass === '8A' || reportClass === '8B') {
+      if (reportSubject !== 'Matematika' && reportSubject !== 'Koding') setReportSubject('Matematika');
     }
   }, [reportClass]);
 
@@ -96,6 +99,26 @@ function App() {
     return () => subscription.unsubscribe();
   }, []);
 
+  // Fetch Riwayat Jurnal untuk Tab Review
+  const fetchJournalsHistory = async () => {
+    if (isDemo) return;
+    setFetchingHistory(true);
+    const { data, error } = await supabase
+      .from('journals')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (!error && data) {
+      setJournalsHistory(data);
+    }
+    setFetchingHistory(false);
+  };
+
+  useEffect(() => {
+    if (activeTab === 'edit') fetchJournalsHistory();
+    if (activeTab === 'siswa') fetchAllStudents();
+  }, [activeTab]);
+
   const fetchProfile = async (userId) => {
     try {
       let { data } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle();
@@ -111,7 +134,7 @@ function App() {
   };
 
   const handleSaveProfile = async () => {
-    if (!session) return alert('Kamu harus login terlebih dahulu!');
+    if (!session) return showToast('Kamu harus login terlebih dahulu!', 'error');
     setLoading(true);
 
     const updates = {
@@ -130,9 +153,9 @@ function App() {
     setLoading(false);
 
     if (!error) {
-      alert('✅ Profil & NIP tersimpan aman!');
+      showToast('Profil & NIP tersimpan permanen!');
     } else {
-      alert('Gagal menyimpan profil: ' + error.message);
+      showToast('Gagal menyimpan profil: ' + error.message, 'error');
     }
   };
 
@@ -146,7 +169,7 @@ function App() {
       const base64String = reader.result;
       setProfile(prev => ({ ...prev, signature_url: base64String }));
       localStorage.setItem('teacher_sig', base64String);
-      alert('✅ Gambar TTD berhasil dimuat! Klik "Simpan Profil Permanen" di bawah.');
+      showToast('Gambar TTD dimuat! Klik Simpan Profil di bawah.');
     };
     reader.readAsDataURL(file);
   };
@@ -190,10 +213,6 @@ function App() {
     if (data) setAllStudents(data);
   };
 
-  useEffect(() => {
-    if (activeTab === 'siswa') fetchAllStudents();
-  }, [activeTab]);
-
   // CRUD SISWA
   const handleAddStudent = async (e) => {
     e.preventDefault();
@@ -204,13 +223,13 @@ function App() {
     ]);
 
     if (!error) {
-      alert('Siswa berhasil ditambahkan!');
+      showToast('Siswa berhasil ditambahkan!');
       setNewStudent({ name: '', class_name: '7' });
       setIsAddingStudent(false);
       fetchAllStudents();
       fetchStudentsByClass(selectedClass);
     } else {
-      alert('Gagal menambah siswa: ' + error.message);
+      showToast('Gagal menambah siswa: ' + error.message, 'error');
     }
   };
 
@@ -221,12 +240,12 @@ function App() {
     }).eq('id', id);
 
     if (!error) {
-      alert('Data siswa berhasil diperbarui!');
+      showToast('Data siswa diperbarui!');
       setEditingStudent(null);
       fetchAllStudents();
       fetchStudentsByClass(selectedClass);
     } else {
-      alert('Gagal memperbarui siswa: ' + error.message);
+      showToast('Gagal memperbarui siswa', 'error');
     }
   };
 
@@ -235,11 +254,11 @@ function App() {
 
     const { error } = await supabase.from('students').delete().eq('id', id);
     if (!error) {
-      alert('Siswa terhapus!');
+      showToast('Siswa terhapus!');
       fetchAllStudents();
       fetchStudentsByClass(selectedClass);
     } else {
-      alert('Gagal menghapus siswa: ' + error.message);
+      showToast('Gagal menghapus siswa', 'error');
     }
   };
 
@@ -249,9 +268,10 @@ function App() {
     setAttendance(att);
   };
 
+  // SIMPAN JURNAL
   const handleSubmitJurnal = async () => {
-    if (isDemo) return alert('Mode Demo: Data tidak tersimpan.');
-    if (!material.trim()) return alert('Isi materi pembelajaran terlebih dahulu!');
+    if (isDemo) return showToast('Mode Demo: Data tidak tersimpan.', 'error');
+    if (!material.trim()) return showToast('Isi materi pembelajaran terlebih dahulu!', 'error');
 
     setLoading(true);
     let photoUrls = [];
@@ -259,38 +279,89 @@ function App() {
       photoUrls = await compressAndUpload(photos, supabase);
     }
 
+    const customEntryDate = new Date(journalDate);
+
     const { data: journal, error } = await supabase.from('journals').insert([
-      { class_name: selectedClass, subject: selectedSubject, material, photos: photoUrls }
+      { 
+        class_name: selectedClass, 
+        subject: selectedSubject, 
+        material, 
+        photos: photoUrls,
+        created_at: customEntryDate 
+      }
     ]).select().single();
 
     if (!error && journal) {
       const attRecords = students.map(s => ({
-        journal_id: journal.id, student_id: s.id, status: attendance[s.id] || 'Hadir', date: new Date()
+        journal_id: journal.id, student_id: s.id, status: attendance[s.id] || 'Hadir', date: customEntryDate
       }));
       const gradeRecords = students.filter(s => grades[s.id]).map(s => ({
-        journal_id: journal.id, student_id: s.id, score: parseFloat(grades[s.id]), date: new Date()
+        journal_id: journal.id, student_id: s.id, score: parseFloat(grades[s.id]), date: customEntryDate
       }));
 
       await supabase.from('attendance').insert(attRecords);
       if (gradeRecords.length > 0) await supabase.from('grades').insert(gradeRecords);
 
-      alert('✅ Jurnal Bel Ajar Berhasil Disimpan!');
+      showToast('✅ Jurnal Bel Ajar Berhasil Disimpan!');
       setMaterial('');
       setPhotos([]);
       setGrades({});
       initAttendance(students);
     } else {
-      alert('Gagal menyimpan jurnal: ' + error?.message);
+      showToast('Gagal menyimpan jurnal: ' + error?.message, 'error');
     }
     setLoading(false);
   };
 
-  // PREPARE PREVIEW CETAK
+  // CETAK INDIVIDUAL SISWA (REKAP PRESENSI H/S/I/A)
+  const handleExportIndividualPDF = async (student) => {
+    let studentAtt = [];
+    if (!isDemo) {
+      const { data } = await supabase
+        .from('attendance')
+        .select('status, date, notes')
+        .eq('student_id', student.id)
+        .order('date', { ascending: false });
+      if (data) studentAtt = data;
+    }
+
+    // Hitung Total H / S / I / A
+    const summary = { H: 0, S: 0, I: 0, A: 0 };
+    studentAtt.forEach(a => {
+      if (a.status === 'Hadir') summary.H++;
+      else if (a.status === 'Sakit') summary.S++;
+      else if (a.status === 'Izin') summary.I++;
+      else if (a.status === 'Alfa') summary.A++;
+    });
+
+    const rows = studentAtt.map((a, idx) => [
+      idx + 1,
+      new Date(a.date).toLocaleDateString('id-ID'),
+      a.status,
+      a.notes || '-'
+    ]);
+
+    setPreviewData({
+      title: `REKAP PRESENSI INDIVIDUAL SISWA`,
+      subtitle: `Nama: ${student.name} | Kelas: ${student.class_name}`,
+      subjectRole: `Guru Mata Pelajaran Kelas ${student.class_name}`,
+      isIndividual: true,
+      summary, // Data H/S/I/A
+      rows: rows.length > 0 ? rows : [],
+      teacherName: profile.full_name || 'NUR ALFI SYAHRI, S.P.',
+      teacherNip: profile.nip || '-------------------',
+      signatureUrl: profile.signature_url
+    });
+    setShowPreviewModal(true);
+  };
+
+  // PREPARE PREVIEW CETAK REKAP KELAS
   const handleOpenPrintPreview = (title, subtitle, subjectName, rows) => {
     setPreviewData({
       title,
       subtitle,
       subjectRole: `Guru Mata Pelajaran ${subjectName}`,
+      isIndividual: false,
       rows,
       teacherName: profile.full_name || 'NUR ALFI SYAHRI, S.P.',
       teacherNip: profile.nip || '-------------------',
@@ -299,19 +370,50 @@ function App() {
     setShowPreviewModal(true);
   };
 
-  const handleTriggerPrint = () => {
-    window.print();
-  };
-
+  // LOGIN DENGAN PROTEKSI MAX 3 KALI LOCKOUT 24 JAM
   const handleLogin = async (e) => {
     e.preventDefault();
+
+    // Cek Lockout
+    if (lockoutUntil) {
+      const lockTime = new Date(lockoutUntil).getTime();
+      const now = new Date().getTime();
+      if (now < lockTime) {
+        const remainingHours = Math.ceil((lockTime - now) / (1000 * 60 * 60));
+        return showToast(`Akses diblokir! Terlalu banyak percobaan. Coba lagi dalam ${remainingHours} jam.`, 'error');
+      } else {
+        localStorage.removeItem('lockout_until');
+        localStorage.setItem('login_attempts', '0');
+        setLockoutUntil(null);
+        setLoginAttempts(0);
+      }
+    }
+
     const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) alert('Login Gagal: ' + error.message);
+
+    if (error) {
+      const newAttempts = loginAttempts + 1;
+      setLoginAttempts(newAttempts);
+      localStorage.setItem('login_attempts', newAttempts.toString());
+
+      if (newAttempts >= 3) {
+        const lockoutTime = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+        localStorage.setItem('lockout_until', lockoutTime);
+        setLockoutUntil(lockoutTime);
+        showToast('❌ Login gagal 3x! Device diblokir selama 24 jam.', 'error');
+      } else {
+        showToast(`Login Gagal! Sisa percobaan: ${3 - newAttempts}x`, 'error');
+      }
+    } else {
+      localStorage.removeItem('login_attempts');
+      setLoginAttempts(0);
+      showToast('Berhasil Login!');
+    }
   };
 
   if (!session && !isDemo) {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-blue-700 to-indigo-900 flex items-center justify-center p-4">
+      <div className="min-h-screen bg-gradient-to-b from-blue-700 to-indigo-900 flex items-center justify-center p-4 font-sans">
         <div className="bg-white/95 backdrop-blur-lg p-8 rounded-3xl shadow-2xl w-full max-w-sm border border-white/20">
           <div className="text-center mb-6">
             <div className="bg-blue-50 p-3 rounded-2xl w-20 h-20 mx-auto flex items-center justify-center mb-3 shadow-inner">
@@ -343,8 +445,19 @@ function App() {
                 value={password} onChange={e => setPassword(e.target.value)} required 
               />
             </div>
-            <button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3.5 rounded-xl font-bold shadow-lg shadow-blue-500/30 transition-all">
-              Masuk Aplikasi
+
+            {loginAttempts > 0 && loginAttempts < 3 && (
+              <p className="text-[11px] text-amber-600 font-bold text-center">⚠️ Sisa percobaan login: {3 - loginAttempts}x</p>
+            )}
+
+            <button 
+              type="submit" 
+              disabled={!!lockoutUntil}
+              className={`w-full text-white py-3.5 rounded-xl font-bold shadow-lg transition-all ${
+                lockoutUntil ? 'bg-slate-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700 shadow-blue-500/30'
+              }`}
+            >
+              {lockoutUntil ? 'Akses Diblokir (24 Jam)' : 'Masuk Aplikasi'}
             </button>
           </form>
 
@@ -366,7 +479,17 @@ function App() {
   return (
     <div className="min-h-screen bg-slate-100 pb-24 max-w-md mx-auto relative shadow-2xl border-x border-slate-200 font-sans">
       
-      {/* Top Mobile Bar (no-print) */}
+      {/* FLOATING CUSTOM TOAST ALERT */}
+      {toast.show && (
+        <div className={`fixed top-4 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 rounded-2xl shadow-xl border flex items-center space-x-2 text-xs font-bold transition-all animate-bounce ${
+          toast.type === 'error' ? 'bg-red-500 text-white border-red-600' : 'bg-slate-900 text-white border-slate-800'
+        }`}>
+          {toast.type === 'error' ? <AlertTriangle className="w-4 h-4 text-amber-300" /> : <CheckCircle className="w-4 h-4 text-emerald-400" />}
+          <span>{toast.message}</span>
+        </div>
+      )}
+
+      {/* Top Mobile Bar */}
       <div className="no-print bg-blue-600 text-white p-4 sticky top-0 z-30 shadow-md rounded-b-2xl flex justify-between items-center">
         <div className="flex items-center space-x-3">
           <img 
@@ -390,13 +513,25 @@ function App() {
         </button>
       </div>
 
-      {/* Main Content (no-print) */}
+      {/* Main Content */}
       <div className="no-print p-4 space-y-4">
 
         {/* TAB 1: INPUT JURNAL */}
         {activeTab === 'input' && (
           <div className="space-y-4">
             <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm space-y-3">
+              
+              {/* OPSI TANGGAL JURNAL (DEFAULT HARI INI) */}
+              <div>
+                <label className="text-xs font-bold text-slate-500 block mb-1">Tanggal Mengajar</label>
+                <input 
+                  type="date" 
+                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700"
+                  value={journalDate} 
+                  onChange={e => setStartDateJournal(e.target.value)}
+                />
+              </div>
+
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-xs font-bold text-slate-500 block mb-1">Kelas</label>
@@ -439,10 +574,11 @@ function App() {
                 />
               </div>
 
+              {/* UPLOAD FOTO BEBAS (DARI GALERI/KAMERA) */}
               <div>
-                <label className="text-xs font-bold text-slate-500 block mb-1">Foto Dokumentasi (Auto Compress)</label>
+                <label className="text-xs font-bold text-slate-500 block mb-1">Foto Dokumentasi (Galeri / Kamera)</label>
                 <input 
-                  type="file" multiple accept="image/*" capture="environment"
+                  type="file" multiple accept="image/*"
                   onChange={e => setPhotos(Array.from(e.target.files))}
                   className="w-full text-xs text-slate-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-blue-50 file:text-blue-600"
                 />
@@ -468,7 +604,6 @@ function App() {
                       <p className="font-extrabold text-xs text-slate-800">{idx + 1}. {student.name}</p>
 
                       <div className="p-2.5 bg-slate-50/80 border border-slate-200/70 rounded-xl flex items-center justify-between">
-                        {/* Radio Options: H, S, I, A */}
                         <div className="flex items-center space-x-3.5">
                           {[
                             { code: 'Hadir', label: 'H', color: 'text-emerald-600' },
@@ -490,7 +625,6 @@ function App() {
                           ))}
                         </div>
 
-                        {/* Nilai Input Card */}
                         <div className="border-l border-slate-200 pl-3 flex flex-col items-center">
                           <span className="text-[9px] font-bold text-slate-400 uppercase mb-0.5">NILAI</span>
                           <input 
@@ -518,12 +652,16 @@ function App() {
           </div>
         )}
 
-        {/* TAB 2: REVIEW JURNAL */}
+        {/* TAB 2: REVIEW JURNAL (MUNCULKAN HISTORY REAL) */}
         {activeTab === 'edit' && (
           <div className="space-y-4">
-            <h3 className="font-bold text-slate-800 text-xs">Riwayat Jurnal Mengajar Bel Ajar</h3>
+            <div className="flex justify-between items-center">
+              <h3 className="font-extrabold text-slate-800 text-xs">Riwayat Jurnal Mengajar Bel Ajar</h3>
+              <button onClick={fetchJournalsHistory} className="text-blue-600 p-1"><RefreshCw className={`w-3.5 h-3.5 ${fetchingHistory ? 'animate-spin' : ''}`} /></button>
+            </div>
+
             {journalsHistory.length === 0 ? (
-              <p className="text-xs text-slate-400 text-center py-8">Belum ada jurnal tersimpan.</p>
+              <p className="text-xs text-slate-400 text-center py-12 bg-white rounded-2xl border">Belum ada jurnal tersimpan.</p>
             ) : (
               journalsHistory.map(j => (
                 <div key={j.id} className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm space-y-2">
@@ -532,8 +670,17 @@ function App() {
                       <span className="text-[10px] font-bold bg-blue-100 text-blue-700 px-2 py-0.5 rounded-md mr-1">Kelas {j.class_name}</span>
                       <span className="text-[10px] font-bold bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-md">{j.subject}</span>
                     </div>
+                    <span className="text-[10px] text-slate-400 font-semibold">{new Date(j.created_at).toLocaleDateString('id-ID')}</span>
                   </div>
-                  <p className="text-xs text-slate-700 font-medium">{j.material}</p>
+                  <p className="text-xs text-slate-700 font-semibold">{j.material}</p>
+                  
+                  {j.photos && j.photos.length > 0 && (
+                    <div className="flex gap-2 pt-1 overflow-x-auto">
+                      {j.photos.map((url, i) => (
+                        <img key={i} src={url} alt="Dokumentasi" className="w-14 h-14 object-cover rounded-xl border" />
+                      ))}
+                    </div>
+                  )}
                 </div>
               ))
             )}
@@ -555,7 +702,6 @@ function App() {
                 </button>
               </div>
 
-              {/* Form Tambah Siswa */}
               {isAddingStudent && (
                 <form onSubmit={handleAddStudent} className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
                   <p className="text-xs font-bold text-slate-700">Tambah Siswa Baru</p>
@@ -582,7 +728,6 @@ function App() {
                 </form>
               )}
 
-              {/* Search Bar */}
               <div className="relative">
                 <Search className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
                 <input 
@@ -593,7 +738,6 @@ function App() {
               </div>
             </div>
 
-            {/* List Semua Siswa */}
             <div className="space-y-2">
               <p className="text-xs text-slate-500 font-bold px-1">Total Siswa: {filteredAllStudents.length}</p>
               {filteredAllStudents.length === 0 ? (
@@ -629,12 +773,7 @@ function App() {
                         </div>
                         <div className="flex items-center space-x-1">
                           <button 
-                            onClick={() => handleOpenPrintPreview(
-                              `REKAP PRESENSI SISWA`,
-                              `Nama: ${student.name} | Kelas: ${student.class_name}`,
-                              `Kelas ${student.class_name}`,
-                              [[1, new Date().toLocaleDateString('id-ID'), 'Hadir (Default)', '-']]
-                            )} 
+                            onClick={() => handleExportIndividualPDF(student)} 
                             title="Preview PDF Siswa"
                             className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-lg"
                           >
@@ -659,7 +798,6 @@ function App() {
         {/* TAB 4: PROFIL GURU & EXPORT REKAP PERIODIK */}
         {activeTab === 'profile' && (
           <div className="space-y-4">
-            {/* CARD 1: EXPORT LAPORAN */}
             <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-3">
               <h3 className="font-extrabold text-slate-800 text-sm border-b pb-2">Opsi Filter Rekap Laporan PDF</h3>
               
@@ -712,11 +850,11 @@ function App() {
                 <div className="grid grid-cols-2 gap-2 pt-1">
                   <div>
                     <label className="text-[10px] font-bold text-slate-400 block mb-1">Dari Tanggal</label>
-                    <input type="date" className="w-full p-2 bg-slate-50 border text-xs rounded-xl" value={startDate} onChange={e => setStartDate(e.target.value)} />
+                    <input type="date" className="w-full p-2 bg-slate-50 border text-xs rounded-xl" value={startDate} onChange={e => setStartDateFilter(e.target.value)} />
                   </div>
                   <div>
                     <label className="text-[10px] font-bold text-slate-400 block mb-1">Sampai Tanggal</label>
-                    <input type="date" className="w-full p-2 bg-slate-50 border text-xs rounded-xl" value={endDate} onChange={e => setEndDate(e.target.value)} />
+                    <input type="date" className="w-full p-2 bg-slate-50 border text-xs rounded-xl" value={endDate} onChange={e => setEndDateFilter(e.target.value)} />
                   </div>
                 </div>
               )}
@@ -743,7 +881,6 @@ function App() {
               </button>
             </div>
 
-            {/* CARD 2: PROFIL & TTD PERMANEN (DROPDOWN AUTO-HIDE) */}
             <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden transition-all">
               <button 
                 onClick={() => setIsProfileOpen(!isProfileOpen)}
@@ -807,7 +944,7 @@ function App() {
 
       </div>
 
-      {/* Floating Footer Navigation (no-print) */}
+      {/* Floating Footer Navigation */}
       <div className="no-print fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-white/95 backdrop-blur-md border-t border-slate-200 flex justify-around p-2 z-30 rounded-t-2xl shadow-lg">
         <button onClick={() => setActiveTab('input')} className={`p-2 flex flex-col items-center ${activeTab === 'input' ? 'text-blue-600 font-bold scale-105' : 'text-slate-400'}`}>
           <BookOpen className="w-5 h-5" />
@@ -830,7 +967,6 @@ function App() {
       {/* MODAL PREVIEW DOKUMEN LAPORAN & CETAK SAVE AS PDF */}
       {showPreviewModal && previewData && (
         <div className="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-sm flex flex-col justify-between p-2 overflow-y-auto">
-          {/* Action Header Modal */}
           <div className="no-print bg-white p-3 rounded-2xl flex justify-between items-center shadow-lg mb-3 sticky top-0 z-10 max-w-xl mx-auto w-full">
             <button 
               onClick={() => setShowPreviewModal(false)}
@@ -841,7 +977,7 @@ function App() {
             </button>
 
             <button 
-              onClick={handleTriggerPrint}
+              onClick={() => window.print()}
               className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl text-xs font-extrabold shadow flex items-center space-x-1.5"
             >
               <Printer className="w-4 h-4" />
@@ -849,12 +985,10 @@ function App() {
             </button>
           </div>
 
-          {/* Area Dokumen Resmi (Penuh 100% Kertas Saat Dicetak) */}
           <div className="print-document bg-white p-6 rounded-xl text-slate-900 font-serif shadow-2xl mx-auto w-full max-w-xl text-[9.5pt] leading-tight">
             
-            {/* KOP SURAT RESMI DENGAN 2 LOGO */}
+            {/* KOP SURAT */}
             <div className="flex items-center justify-between gap-3 mb-1">
-              {/* Logo Pemkab Kutai Barat (Kiri) */}
               <img 
                 src="/logo-kubar.png" 
                 alt="Logo Pemkab Kutai Barat" 
@@ -862,7 +996,6 @@ function App() {
                 className="w-16 h-20 object-contain"
               />
 
-              {/* Teks Tengah Kop Surat */}
               <div className="text-center flex-1">
                 <h3 className="font-bold text-[11pt] uppercase tracking-wide m-0 p-0">PEMERINTAH KABUPATEN KUTAI BARAT</h3>
                 <h3 className="font-bold text-[12pt] uppercase tracking-wide m-0 p-0">DINAS PENDIDIKAN DAN KEBUDAYAAN</h3>
@@ -875,7 +1008,6 @@ function App() {
                 </p>
               </div>
 
-              {/* Logo SMPN 1 Damai (Kanan) */}
               <img 
                 src="/logo-smp.png" 
                 alt="Logo SMPN 1 Damai" 
@@ -884,38 +1016,52 @@ function App() {
               />
             </div>
 
-            {/* Garis Tebal Ganda Kop Surat */}
             <div className="border-t-[2.5px] border-black border-b-[0.8px] border-b-black h-[2px] my-2"></div>
 
-            {/* Judul Laporan */}
             <div className="text-center my-3">
               <h4 className="font-bold text-[11pt] uppercase underline">{previewData.title}</h4>
               {previewData.subtitle && <p className="text-[9pt] text-slate-700 font-sans mt-0.5">{previewData.subtitle}</p>}
             </div>
 
-            {/* Tabel Data Siswa */}
+            {/* RINGKASAN H/S/I/A APABILA LAPORAN INDIVIDUAL SISWA */}
+            {previewData.isIndividual && previewData.summary && (
+              <div className="mb-3 font-sans text-[8.5pt] bg-slate-50 p-2 rounded-lg border border-slate-300 flex justify-around font-bold">
+                <span className="text-emerald-700">Hadir (H): {previewData.summary.H}</span>
+                <span className="text-amber-700">Sakit (S): {previewData.summary.S}</span>
+                <span className="text-blue-700">Izin (I): {previewData.summary.I}</span>
+                <span className="text-red-700">Alfa (A): {previewData.summary.A}</span>
+              </div>
+            )}
+
+            {/* TABEL DATA SISWA */}
             <table className="w-full border-collapse border border-slate-900 text-[8.5pt] font-sans">
               <thead>
                 <tr className="bg-slate-200 text-slate-900 font-bold text-center">
                   <th className="border border-slate-900 p-1 w-10">NO</th>
-                  <th className="border border-slate-900 p-1 text-left">NAMA LENGKAP SISWA</th>
+                  <th className="border border-slate-900 p-1 text-left">{previewData.isIndividual ? 'TANGGAL' : 'NAMA LENGKAP SISWA'}</th>
                   <th className="border border-slate-900 p-1 w-28">STATUS PRESENSI</th>
-                  <th className="border border-slate-900 p-1 w-20">NILAI</th>
+                  <th className="border border-slate-900 p-1 w-20">{previewData.isIndividual ? 'CATATAN' : 'NILAI'}</th>
                 </tr>
               </thead>
               <tbody>
-                {previewData.rows.map((row, idx) => (
-                  <tr key={idx} className={idx % 2 === 1 ? 'bg-slate-50' : 'bg-white'}>
-                    <td className="border border-slate-800 p-1 text-center font-medium">{row[0]}</td>
-                    <td className="border border-slate-800 p-1 font-bold">{row[1]}</td>
-                    <td className={`border border-slate-800 p-1 text-center font-bold ${row[2] === 'Hadir' ? 'text-emerald-700' : 'text-red-600'}`}>{row[2]}</td>
-                    <td className="border border-slate-800 p-1 text-center font-medium">{row[3]}</td>
+                {previewData.rows.length === 0 ? (
+                  <tr>
+                    <td colSpan="4" className="border border-slate-800 p-3 text-center text-slate-400 italic">Belum ada riwayat data presensi.</td>
                   </tr>
-                ))}
+                ) : (
+                  previewData.rows.map((row, idx) => (
+                    <tr key={idx} className={idx % 2 === 1 ? 'bg-slate-50' : 'bg-white'}>
+                      <td className="border border-slate-800 p-1 text-center font-medium">{row[0]}</td>
+                      <td className="border border-slate-800 p-1 font-bold">{row[1]}</td>
+                      <td className={`border border-slate-800 p-1 text-center font-bold ${row[2] === 'Hadir' ? 'text-emerald-700' : 'text-red-600'}`}>{row[2]}</td>
+                      <td className="border border-slate-800 p-1 text-center font-medium">{row[3]}</td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
 
-            {/* Area TTD Guru (Dinamis Sesuai Mapel) */}
+            {/* AREA TTD GURU */}
             <div className="mt-5 flex justify-end font-sans">
               <div className="w-56 text-left text-[9pt]">
                 <p>Damai, {new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
