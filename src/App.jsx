@@ -34,7 +34,7 @@ function App() {
   });
   const [isProfileOpen, setIsProfileOpen] = useState(false);
 
-  // Form State Jurnal
+  // Form State Jurnal Input
   const [journalDate, setStartDateJournal] = useState(new Date().toISOString().split('T')[0]);
   const [selectedClass, setSelectedClass] = useState('7');
   const [selectedSubject, setSelectedSubject] = useState('Matematika');
@@ -64,10 +64,12 @@ function App() {
   const [newStudent, setNewStudent] = useState({ name: '', class_name: '7' });
   const [editingStudent, setEditingStudent] = useState(null);
 
-  // History Jurnal (Tab Review) & State Edit Jurnal
+  // History Jurnal (Tab Review) & Full Edit State
   const [journalsHistory, setJournalsHistory] = useState([]);
   const [fetchingHistory, setFetchingHistory] = useState(false);
-  const [editingJournal, setEditingJournal] = useState(null); // State Edit Jurnal
+  const [editingJournal, setEditingJournal] = useState(null); // { id, material, class_name, attendance: {}, grades: {} }
+  const [editStudentsList, setEditStudentsList] = useState([]);
+  const [savingEdit, setSavingEdit] = useState(false);
 
   // LOGIKA MAPEL KETAT
   useEffect(() => {
@@ -100,7 +102,7 @@ function App() {
     return () => subscription.unsubscribe();
   }, []);
 
-  // Fetch Riwayat Jurnal
+  // Fetch Riwayat Jurnal untuk Tab Review
   const fetchJournalsHistory = async () => {
     if (isDemo) return;
     setFetchingHistory(true);
@@ -120,15 +122,114 @@ function App() {
     if (activeTab === 'siswa') fetchAllStudents();
   }, [activeTab]);
 
+  // AKSI EDIT FULL JURNAL (MEMUAT DATA SISWA, PRESENSI & NILAI LAMA)
+  const handleStartEditJournal = async (journal) => {
+    if (editingJournal?.id === journal.id) {
+      setEditingJournal(null);
+      return;
+    }
+
+    setFetchingHistory(true);
+    // 1. Fetch data siswa di kelas tersebut
+    const { data: studentList } = await supabase
+      .from('students')
+      .select('*')
+      .eq('class_name', journal.class_name)
+      .order('name', { ascending: true });
+
+    // 2. Fetch data presensi pada jurnal ini
+    const { data: attData } = await supabase
+      .from('attendance')
+      .select('*')
+      .eq('journal_id', journal.id);
+
+    // 3. Fetch data nilai pada jurnal ini
+    const { data: gradeData } = await supabase
+      .from('grades')
+      .select('*')
+      .eq('journal_id', journal.id);
+
+    const initialAtt = {};
+    const initialGrades = {};
+
+    if (studentList) {
+      studentList.forEach(s => {
+        const foundAtt = attData?.find(a => a.student_id === s.id);
+        initialAtt[s.id] = foundAtt ? foundAtt.status : 'Hadir';
+
+        const foundGrade = gradeData?.find(g => g.student_id === s.id);
+        initialGrades[s.id] = foundGrade ? foundGrade.score.toString() : '';
+      });
+    }
+
+    setEditStudentsList(studentList || []);
+    setEditingJournal({
+      id: journal.id,
+      material: journal.material,
+      class_name: journal.class_name,
+      created_at: journal.created_at,
+      attendance: initialAtt,
+      grades: initialGrades
+    });
+    setFetchingHistory(false);
+  };
+
+  // SIMPAN HASIL REVISI JURNAL (MATERI, PRESENSI & NILAI SUSULAN)
+  const handleSaveFullJournal = async () => {
+    if (!editingJournal) return;
+    setSavingEdit(true);
+
+    // 1. Update Materi Jurnal
+    const { error: jErr } = await supabase
+      .from('journals')
+      .update({ material: editingJournal.material })
+      .eq('id', editingJournal.id);
+
+    if (jErr) {
+      showToast('Gagal update materi: ' + jErr.message, 'error');
+      setSavingEdit(false);
+      return;
+    }
+
+    // 2. Upsert Presensi
+    const attRecords = editStudentsList.map(s => ({
+      journal_id: editingJournal.id,
+      student_id: s.id,
+      status: editingJournal.attendance[s.id] || 'Hadir',
+      date: editingJournal.created_at
+    }));
+
+    await supabase.from('attendance').upsert(attRecords, { onConflict: 'journal_id,student_id' });
+
+    // 3. Upsert / Delete Nilai Susulan
+    for (const s of editStudentsList) {
+      const scoreVal = editingJournal.grades[s.id];
+      if (scoreVal !== undefined && scoreVal !== null && scoreVal !== '') {
+        await supabase.from('grades').upsert([{
+          journal_id: editingJournal.id,
+          student_id: s.id,
+          score: parseFloat(scoreVal),
+          date: editingJournal.created_at
+        }], { onConflict: 'journal_id,student_id' });
+      } else {
+        // Jika nilai dikosongkan, hapus rekaman nilai
+        await supabase.from('grades').delete().match({ journal_id: editingJournal.id, student_id: s.id });
+      }
+    }
+
+    showToast('✅ Jurnal, Presensi & Nilai Berhasil Diperbarui!');
+    setEditingJournal(null);
+    setSavingEdit(false);
+    fetchJournalsHistory();
+  };
+
   // HAPUS JURNAL
   const handleDeleteJournal = async (journalId) => {
     if (!window.confirm('Yakin ingin menghapus jurnal ini? Data presensi terkait juga akan terhapus.')) return;
 
-    // Hapus presensi & nilai terkait terlebih dahulu
     await supabase.from('attendance').delete().eq('journal_id', journalId);
     await supabase.from('grades').delete().eq('journal_id', journalId);
     
-    // Hapus jurnal
     const { error } = await supabase.from('journals').delete().eq('id', journalId);
 
     if (!error) {
@@ -136,24 +237,6 @@ function App() {
       fetchJournalsHistory();
     } else {
       showToast('Gagal menghapus jurnal: ' + error.message, 'error');
-    }
-  };
-
-  // UPDATE MATERI JURNAL
-  const handleUpdateJournal = async (journalId) => {
-    if (!editingJournal.material.trim()) return showToast('Materi tidak boleh kosong!', 'error');
-
-    const { error } = await supabase
-      .from('journals')
-      .update({ material: editingJournal.material })
-      .eq('id', journalId);
-
-    if (!error) {
-      showToast('Jurnal berhasil diperbarui!');
-      setEditingJournal(null);
-      fetchJournalsHistory();
-    } else {
-      showToast('Gagal memperbarui jurnal: ' + error.message, 'error');
     }
   };
 
@@ -679,7 +762,7 @@ function App() {
           </div>
         )}
 
-        {/* 🔥 TAB 2: REVIEW JURNAL (LENGKAP EDIT & HAPUS JURNAL) */}
+        {/* 🔥 TAB 2: REVIEW JURNAL (LENGKAP FITUR EDIT TOTAL: MATERI, PRESENSI & NILAI SUSULAN) */}
         {activeTab === 'edit' && (
           <div className="space-y-4">
             <div className="flex justify-between items-center">
@@ -701,11 +784,11 @@ function App() {
                     <div className="flex items-center space-x-2">
                       <span className="text-[10px] text-slate-400 font-semibold">{new Date(j.created_at).toLocaleDateString('id-ID')}</span>
                       
-                      {/* 🔥 TOMBOL EDIT & HAPUS JURNAL */}
+                      {/* 🔥 TOMBOL TOGGLE EDIT FULL JURNAL */}
                       <button 
-                        onClick={() => setEditingJournal(editingJournal?.id === j.id ? null : { id: j.id, material: j.material })}
-                        className="text-slate-500 hover:text-blue-600 p-1"
-                        title="Edit Jurnal"
+                        onClick={() => handleStartEditJournal(j)}
+                        className={`p-1 rounded-lg ${editingJournal?.id === j.id ? 'bg-blue-100 text-blue-700 font-bold' : 'text-slate-500 hover:text-blue-600'}`}
+                        title="Edit Total Jurnal"
                       >
                         <Edit className="w-3.5 h-3.5" />
                       </button>
@@ -720,17 +803,82 @@ function App() {
                     </div>
                   </div>
 
-                  {/* Mode Edit vs View Materi */}
+                  {/* MODE EDIT TOTAL JURNAL */}
                   {editingJournal?.id === j.id ? (
-                    <div className="space-y-2 pt-1">
-                      <textarea 
-                        className="w-full p-2 bg-slate-50 border rounded-xl text-xs font-semibold"
-                        value={editingJournal.material}
-                        onChange={e => setEditingJournal({...editingJournal, material: e.target.value})}
-                      />
-                      <div className="flex gap-2">
-                        <button onClick={() => handleUpdateJournal(j.id)} className="bg-emerald-600 text-white text-[11px] font-bold px-3 py-1 rounded-lg">Simpan</button>
-                        <button onClick={() => setEditingJournal(null)} className="bg-slate-200 text-slate-700 text-[11px] font-bold px-3 py-1 rounded-lg">Batal</button>
+                    <div className="space-y-3 pt-2 bg-blue-50/50 p-3 rounded-xl border border-blue-200">
+                      <div>
+                        <label className="text-[10px] font-bold text-slate-500 block mb-1">Edit Materi Ringkasan Mengajar</label>
+                        <textarea 
+                          className="w-full p-2 bg-white border border-slate-200 rounded-xl text-xs font-semibold"
+                          value={editingJournal.material}
+                          onChange={e => setEditingJournal({...editingJournal, material: e.target.value})}
+                        />
+                      </div>
+
+                      {/* EDIT PRESENSI & NILAI SUSULAN SISWA */}
+                      <div>
+                        <label className="text-[10px] font-bold text-slate-600 block mb-1.5">Edit Presensi & Nilai Susulan Siswa</label>
+                        <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+                          {editStudentsList.map((student, idx) => (
+                            <div key={student.id} className="p-2 bg-white border rounded-xl flex items-center justify-between text-xs">
+                              <span className="font-bold text-[11px] text-slate-800 truncate flex-1">{idx + 1}. {student.name}</span>
+                              
+                              <div className="flex items-center space-x-2">
+                                {/* Radio H/S/I/A */}
+                                <div className="flex items-center space-x-1.5 bg-slate-50 p-1 rounded-lg border">
+                                  {[
+                                    { code: 'Hadir', label: 'H', color: 'text-emerald-600' },
+                                    { code: 'Sakit', label: 'S', color: 'text-amber-600' },
+                                    { code: 'Izin', label: 'I', color: 'text-blue-600' },
+                                    { code: 'Alfa', label: 'A', color: 'text-red-600' },
+                                  ].map(item => (
+                                    <label key={item.code} className="flex flex-col items-center cursor-pointer select-none">
+                                      <span className={`text-[9px] font-black ${item.color}`}>{item.label}</span>
+                                      <input 
+                                        type="radio" 
+                                        name={`edit-att-${student.id}`} 
+                                        value={item.code}
+                                        checked={(editingJournal.attendance[student.id] || 'Hadir') === item.code}
+                                        onChange={() => setEditingJournal({
+                                          ...editingJournal,
+                                          attendance: { ...editingJournal.attendance, [student.id]: item.code }
+                                        })}
+                                        className="w-3 h-3 accent-blue-600 cursor-pointer"
+                                      />
+                                    </label>
+                                  ))}
+                                </div>
+
+                                {/* Nilai Susulan */}
+                                <input 
+                                  type="number" 
+                                  placeholder="Nilai" 
+                                  className="w-11 text-xs p-1 border rounded-lg text-center font-bold bg-white"
+                                  value={editingJournal.grades[student.id] || ''}
+                                  onChange={e => setEditingJournal({
+                                    ...editingJournal,
+                                    grades: { ...editingJournal.grades, [student.id]: e.target.value }
+                                  })}
+                                />
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="flex gap-2 pt-2 border-t">
+                        <button 
+                          onClick={handleSaveFullJournal} disabled={savingEdit}
+                          className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-4 py-2 rounded-xl flex-1 shadow"
+                        >
+                          {savingEdit ? 'Menyimpan...' : 'Simpan Semua Perubahan'}
+                        </button>
+                        <button 
+                          onClick={() => setEditingJournal(null)} 
+                          className="bg-slate-200 text-slate-700 text-xs font-bold px-3 py-2 rounded-xl"
+                        >
+                          Batal
+                        </button>
                       </div>
                     </div>
                   ) : (
