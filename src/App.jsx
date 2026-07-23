@@ -5,7 +5,7 @@ import { generatePDFReport } from './utils/pdfGenerator';
 import { 
   BookOpen, FileText, LogOut, Check, UserCheck, 
   Search, Edit3, Image as ImageIcon, Users, RefreshCw,
-  UserPlus, Trash2, Edit, Save, X
+  Plus, Trash, Edit, Save, X
 } from 'lucide-react';
 
 export default function App() {
@@ -36,19 +36,18 @@ export default function App() {
   const [searchStudentQuery, setSearchStudentQuery] = useState('');
   const [isAddingStudent, setIsAddingStudent] = useState(false);
   const [newStudent, setNewStudent] = useState({ name: '', class_name: '7' });
-  const [editingStudent, setEditingStudent] = useState(null); // id siswa yang sedang diedit
+  const [editingStudent, setEditingStudent] = useState(null);
 
   // History Jurnal
   const [journalsHistory, setJournalsHistory] = useState([]);
 
-  // 🔥 1. MAPEL OTOMATIS BERDASARKAN KELAS
+  // 1. MAPPING MAPEL OTOMATIS BERDASARKAN KELAS
   useEffect(() => {
     if (selectedClass === '7') {
       setSelectedSubject('Matematika');
     } else if (selectedClass === '9A' || selectedClass === '9B') {
       setSelectedSubject('Koding');
     } else {
-      // Kelas 8A dan 8B default Matematika jika tidak diset
       if (selectedSubject !== 'Matematika' && selectedSubject !== 'Koding') {
         setSelectedSubject('Matematika');
       }
@@ -74,7 +73,7 @@ export default function App() {
     if (data) setProfile(data);
   };
 
-  // Fetch Siswa per Kelas untuk Jurnal
+  // Fetch Siswa per Kelas
   useEffect(() => {
     fetchStudentsByClass(selectedClass);
   }, [selectedClass, isDemo]);
@@ -107,7 +106,7 @@ export default function App() {
     setFetchingStudents(false);
   };
 
-  // 🔥 Fetch Semua Siswa untuk Management Tab "Siswa"
+  // Fetch Semua Siswa untuk Tab "Siswa"
   const fetchAllStudents = async () => {
     if (isDemo) return;
     const { data } = await supabase.from('students').select('*').order('name', { ascending: true });
@@ -319,7 +318,6 @@ export default function App() {
                   </select>
                 </div>
 
-                {/* 🔥 DINAMIS PENGATURAN MAPEL */}
                 <div>
                   <label className="text-xs font-bold text-slate-500 block mb-1">Mata Pelajaran</label>
                   <select 
@@ -436,7 +434,7 @@ export default function App() {
           </div>
         )}
 
-        {/* 🔥 TAB 3: MANAGEMENT SISWA (CRUD LENGKAP) */}
+        {/* TAB 3: MANAGEMENT SISWA */}
         {activeTab === 'siswa' && (
           <div className="space-y-4">
             <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm space-y-3">
@@ -446,7 +444,7 @@ export default function App() {
                   onClick={() => setIsAddingStudent(!isAddingStudent)}
                   className="bg-blue-600 text-white px-3 py-1.5 rounded-xl text-xs font-bold flex items-center space-x-1"
                 >
-                  <UserPlus className="w-3.5 h-3.5" />
+                  <Plus className="w-3.5 h-3.5" />
                   <span>Tambah Siswa</span>
                 </button>
               </div>
@@ -525,7 +523,7 @@ export default function App() {
                           <Edit className="w-4 h-4" />
                         </button>
                         <button onClick={() => handleDeleteStudent(student.id, student.name)} className="p-1.5 text-slate-400 hover:text-red-600">
-                          <Trash2 className="w-4 h-4" />
+                          <Trash className="w-4 h-4" />
                         </button>
                       </div>
                     </>
