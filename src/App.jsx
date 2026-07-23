@@ -5,7 +5,7 @@ import { generatePDFReport } from './utils/pdfGenerator';
 import { 
   BookOpen, FileText, LogOut, Check, UserCheck, 
   Search, Edit3, Image as ImageIcon, Users, RefreshCw,
-  Plus, Trash, Edit, Save, X, Upload
+  Plus, Trash, Edit, Save, X, Download, Calendar
 } from 'lucide-react';
 
 export default function App() {
@@ -13,12 +13,12 @@ export default function App() {
   const [isDemo, setIsDemo] = useState(false);
   const [activeTab, setActiveTab] = useState('input');
   
-  // Auth Form
+  // Auth
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
 
-  // Profil Guru Auto-Fetch & Save
-  const [profile, setProfile] = useState({ full_name: '', nip: '', signature_url: '' });
+  // Profil Guru
+  const [profile, setProfile] = useState({ full_name: 'NUR ALFI SYAHRI, S.P.', nip: '', signature_url: '' });
   const [uploadingSig, setUploadingSig] = useState(false);
 
   // Form State Jurnal
@@ -32,7 +32,12 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [fetchingStudents, setFetchingStudents] = useState(false);
 
-  // Management Siswa State (CRUD & Search)
+  // Filter Rekap Laporan
+  const [reportPeriod, setReportPeriod] = useState('bulanan'); // 'harian', 'mingguan', 'bulanan', 'semester', 'custom'
+  const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
+  const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
+
+  // Management Siswa
   const [allStudents, setAllStudents] = useState([]);
   const [searchStudentQuery, setSearchStudentQuery] = useState('');
   const [isAddingStudent, setIsAddingStudent] = useState(false);
@@ -42,7 +47,7 @@ export default function App() {
   // History Jurnal
   const [journalsHistory, setJournalsHistory] = useState([]);
 
-  // LOGIKA MAPEL BERDASARKAN KELAS
+  // LOGIKA MAPEL
   useEffect(() => {
     if (selectedClass === '7') {
       setSelectedSubject('Matematika');
@@ -69,19 +74,12 @@ export default function App() {
     return () => subscription.unsubscribe();
   }, []);
 
-  // 🔥 FETCH PROFIL DARI SUPABASE (NIP & TTD OTOMATIS MUNCUL)
   const fetchProfile = async (userId) => {
     try {
-      let { data } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', userId)
-        .maybeSingle();
-
+      let { data } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle();
       if (data) {
         setProfile(data);
       } else {
-        // Buat row profil default jika belum ada
         const newProfile = { id: userId, full_name: 'NUR ALFI SYAHRI, S.P.', nip: '', signature_url: '' };
         await supabase.from('profiles').insert([newProfile]);
         setProfile(newProfile);
@@ -91,7 +89,6 @@ export default function App() {
     }
   };
 
-  // 🔥 SIMPAN PROFIL PERMANEN KE DATABASE SUPABASE
   const handleSaveProfile = async () => {
     if (!session) return alert('Kamu harus login terlebih dahulu!');
     setLoading(true);
@@ -108,13 +105,12 @@ export default function App() {
     setLoading(false);
 
     if (!error) {
-      alert('✅ Profil, NIP, & TTD Tersimpan PERMANEN di Supabase!');
+      alert('✅ Profil, NIP, & TTD tersimpan permanen di Supabase!');
     } else {
-      alert('Gagal menyimpan: ' + error.message);
+      alert('Gagal menyimpan profil: ' + error.message);
     }
   };
 
-  // 🔥 UPLOAD TTD KE BUCKET SIGNATURES SUPABASE
   const handleSignatureUpload = async (e) => {
     const file = e.target.files[0];
     if (!file || !session) return;
@@ -127,14 +123,13 @@ export default function App() {
     if (!error) {
       const { data: publicUrlData } = supabase.storage.from('signatures').getPublicUrl(fileName);
       setProfile(prev => ({ ...prev, signature_url: publicUrlData.publicUrl }));
-      alert('Foto TTD berhasil diunggah! Klik "Simpan Profil Permanen" di bawah.');
+      alert('Foto TTD berhasil diunggah!');
     } else {
       alert('Gagal upload TTD: ' + error.message);
     }
     setUploadingSig(false);
   };
 
-  // Fetch Siswa per Kelas
   useEffect(() => {
     fetchStudentsByClass(selectedClass);
   }, [selectedClass, isDemo]);
@@ -167,7 +162,6 @@ export default function App() {
     setFetchingStudents(false);
   };
 
-  // Fetch Semua Siswa
   const fetchAllStudents = async () => {
     if (isDemo) return;
     const { data } = await supabase.from('students').select('*').order('name', { ascending: true });
@@ -267,6 +261,36 @@ export default function App() {
       alert('Gagal menyimpan jurnal: ' + error?.message);
     }
     setLoading(false);
+  };
+
+  // 🔥 EXPORT PDF KHUSUS PER SISWA
+  const handleExportIndividualPDF = async (student) => {
+    let studentAtt = [];
+    if (!isDemo) {
+      const { data } = await supabase
+        .from('attendance')
+        .select('status, date, notes')
+        .eq('student_id', student.id)
+        .order('date', { ascending: false });
+      if (data) studentAtt = data;
+    }
+
+    const rows = studentAtt.map((a, idx) => [
+      idx + 1,
+      new Date(a.date).toLocaleDateString('id-ID'),
+      a.status,
+      a.notes || '-'
+    ]);
+
+    generatePDFReport({
+      title: `Rekap Presensi Individual Siswa`,
+      subtitle: `Nama: ${student.name}  |  Kelas: ${student.class_name}`,
+      headers: ['No', 'Tanggal', 'Status Kehadiran', 'Catatan'],
+      rows: rows.length > 0 ? rows : [[1, '-', 'Hadir (Default)', '-']],
+      teacherName: profile.full_name,
+      teacherNip: profile.nip,
+      signatureUrl: profile.signature_url
+    });
   };
 
   const handleLogin = async (e) => {
@@ -494,7 +518,7 @@ export default function App() {
           </div>
         )}
 
-        {/* TAB 3: MANAGEMENT SISWA */}
+        {/* TAB 3: MANAGEMENT SISWA + EXPORT INDIVIDUAL */}
         {activeTab === 'siswa' && (
           <div className="space-y-4">
             <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm space-y-3">
@@ -582,6 +606,14 @@ export default function App() {
                           <span className="text-[10px] font-bold bg-blue-50 text-blue-600 px-2 py-0.5 rounded-md">Kelas {student.class_name}</span>
                         </div>
                         <div className="flex items-center space-x-1">
+                          {/* 🔥 Tombol Export PDF Per Siswa */}
+                          <button 
+                            onClick={() => handleExportIndividualPDF(student)} 
+                            title="Export PDF Siswa"
+                            className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-lg"
+                          >
+                            <Download className="w-4 h-4" />
+                          </button>
                           <button onClick={() => setEditingStudent(student)} className="p-1.5 text-slate-500 hover:text-blue-600">
                             <Edit className="w-4 h-4" />
                           </button>
@@ -598,71 +630,123 @@ export default function App() {
           </div>
         )}
 
-        {/* 🔥 TAB 4: PROFIL GURU & PERMANEN TTD/NIP */}
+        {/* TAB 4: PROFIL GURU & EXPORT REKAP PERIODIK */}
         {activeTab === 'profile' && (
-          <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4">
-            <h3 className="font-extrabold text-slate-800 text-sm border-b pb-2">Profil & TTD Digital Permanen</h3>
-            
-            <div>
-              <label className="text-xs font-bold text-slate-500 block mb-1">Nama Lengkap Guru</label>
-              <input 
-                type="text" className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold"
-                value={profile.full_name || ''} 
-                onChange={e => setProfile({...profile, full_name: e.target.value})}
-              />
-            </div>
+          <div className="space-y-4">
+            <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-3">
+              <h3 className="font-extrabold text-slate-800 text-sm border-b pb-2">Opsi Filter Rekap Laporan PDF</h3>
+              
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-xs font-bold text-slate-500 block mb-1">Periode Laporan</label>
+                  <select 
+                    className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700"
+                    value={reportPeriod} onChange={e => setReportPeriod(e.target.value)}
+                  >
+                    <option value="harian">Harian (Hari Ini)</option>
+                    <option value="mingguan">Mingguan (7 Hari)</option>
+                    <option value="bulanan">Bulanan (Bulan Ini)</option>
+                    <option value="semester">Semester Ini</option>
+                    <option value="custom">Tentukan Tanggal</option>
+                  </select>
+                </div>
 
-            <div>
-              <label className="text-xs font-bold text-slate-500 block mb-1">NIP Guru</label>
-              <input 
-                type="text" className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold"
-                placeholder="Masukkan NIP Kamu..."
-                value={profile.nip || ''} 
-                onChange={e => setProfile({...profile, nip: e.target.value})}
-              />
-            </div>
+                <div>
+                  <label className="text-xs font-bold text-slate-500 block mb-1">Kelas Laporan</label>
+                  <select 
+                    className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700"
+                    value={selectedClass} onChange={e => setSelectedClass(e.target.value)}
+                  >
+                    <option value="7">Kelas 7</option>
+                    <option value="8A">Kelas 8A</option>
+                    <option value="8B">Kelas 8B</option>
+                    <option value="9A">Kelas 9A</option>
+                    <option value="9B">Kelas 9B</option>
+                  </select>
+                </div>
+              </div>
 
-            <div>
-              <label className="text-xs font-bold text-slate-500 block mb-1">Upload Tanda Tangan (PNG Transparan/Foto TTD)</label>
-              <input 
-                type="file" accept="image/*" 
-                onChange={handleSignatureUpload} 
-                className="w-full text-xs text-slate-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-blue-50 file:text-blue-600" 
-              />
-              {uploadingSig && <p className="text-[10px] text-blue-600 mt-1 font-semibold">Mengunggah TTD ke Supabase...</p>}
-              {profile.signature_url && (
-                <div className="mt-2 p-2 bg-slate-50 rounded-xl border border-slate-200 text-center">
-                  <p className="text-[10px] font-bold text-slate-400 mb-1">Preview TTD Tersimpan:</p>
-                  <img src={profile.signature_url} alt="TTD Guru" className="h-16 mx-auto object-contain" />
+              {reportPeriod === 'custom' && (
+                <div className="grid grid-cols-2 gap-2 pt-1">
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-400 block mb-1">Dari Tanggal</label>
+                    <input type="date" className="w-full p-2 bg-slate-50 border text-xs rounded-xl" value={startDate} onChange={e => setStartDate(e.target.value)} />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-400 block mb-1">Sampai Tanggal</label>
+                    <input type="date" className="w-full p-2 bg-slate-50 border text-xs rounded-xl" value={endDate} onChange={e => setEndDate(e.target.value)} />
+                  </div>
                 </div>
               )}
+
+              <button 
+                onClick={async () => {
+                  generatePDFReport({
+                    title: `Rekap Presensi & Nilai Siswa (${reportPeriod.toUpperCase()})`,
+                    subtitle: `SMPN 1 Damai  |  Kelas: ${selectedClass}  |  Mapel: ${selectedSubject}`,
+                    headers: ['No', 'Nama Siswa', 'Status Presensi', 'Nilai Harian'],
+                    rows: students.map((s, idx) => [
+                      idx + 1, 
+                      s.name, 
+                      attendance[s.id] || 'Hadir', 
+                      grades[s.id] || '-'
+                    ]),
+                    teacherName: profile.full_name,
+                    teacherNip: profile.nip,
+                    signatureUrl: profile.signature_url
+                  });
+                }}
+                className="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-3 rounded-xl font-bold text-xs flex items-center justify-center space-x-2 transition-all shadow"
+              >
+                <FileText className="w-4 h-4" />
+                <span>Cetak PDF Laporan Resmi Kop Sekolah</span>
+              </button>
             </div>
 
-            <button 
-              onClick={handleSaveProfile} disabled={loading}
-              className="w-full bg-slate-800 hover:bg-slate-900 text-white py-3 rounded-xl font-bold text-xs shadow transition-all"
-            >
-              {loading ? 'Menyimpan...' : 'Simpan Profil Permanen ke Database'}
-            </button>
+            <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-3">
+              <h3 className="font-extrabold text-slate-800 text-sm border-b pb-2">Profil & TTD Digital Permanen</h3>
+              
+              <div>
+                <label className="text-xs font-bold text-slate-500 block mb-1">Nama Lengkap Guru</label>
+                <input 
+                  type="text" className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold"
+                  value={profile.full_name || ''} 
+                  onChange={e => setProfile({...profile, full_name: e.target.value})}
+                />
+              </div>
 
-            <hr className="my-2 border-slate-100" />
+              <div>
+                <label className="text-xs font-bold text-slate-500 block mb-1">NIP Guru</label>
+                <input 
+                  type="text" className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold"
+                  value={profile.nip || ''} 
+                  onChange={e => setProfile({...profile, nip: e.target.value})}
+                />
+              </div>
 
-            <button 
-              onClick={() => {
-                generatePDFReport({
-                  title: `Laporan Bel Ajar - Kelas ${selectedClass}`,
-                  headers: ['No', 'Nama Siswa', 'Status', 'Nilai'],
-                  rows: students.map((s, idx) => [idx + 1, s.name, attendance[s.id] || 'Hadir', grades[s.id] || '-']),
-                  teacherName: profile.full_name,
-                  teacherNip: profile.nip,
-                  signatureBase64: profile.signature_url
-                });
-              }}
-              className="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-3 rounded-xl font-bold text-xs flex items-center justify-center space-x-2 transition-all shadow"
-            >
-              <FileText className="w-4 h-4" />
-              <span>Cetak PDF Laporan Bel Ajar</span>
-            </button>
+              <div>
+                <label className="text-xs font-bold text-slate-500 block mb-1">Upload File Gambar TTD (PNG Transparan)</label>
+                <input 
+                  type="file" accept="image/*" 
+                  onChange={handleSignatureUpload} 
+                  className="w-full text-xs text-slate-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-blue-50 file:text-blue-600" 
+                />
+                {uploadingSig && <p className="text-[10px] text-blue-600 mt-1 font-semibold">Mengunggah TTD ke Supabase...</p>}
+                {profile.signature_url && (
+                  <div className="mt-2 p-2 bg-slate-50 rounded-xl border border-slate-200 text-center">
+                    <p className="text-[10px] font-bold text-slate-400 mb-1">Preview TTD Tersimpan:</p>
+                    <img src={profile.signature_url} alt="TTD Guru" className="h-16 mx-auto object-contain" />
+                  </div>
+                )}
+              </div>
+
+              <button 
+                onClick={handleSaveProfile} disabled={loading}
+                className="w-full bg-slate-800 hover:bg-slate-900 text-white py-3 rounded-xl font-bold text-xs shadow transition-all"
+              >
+                {loading ? 'Menyimpan...' : 'Simpan Profil Permanen ke Database'}
+              </button>
+            </div>
           </div>
         )}
 
