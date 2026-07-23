@@ -1,11 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from './supabaseClient';
 import { compressAndUpload } from './utils/compressor';
-import { printHTMLReport } from './utils/pdfGenerator';
 import { 
   BookOpen, FileText, LogOut, Check, UserCheck, 
   Search, Edit3, Image as ImageIcon, Users, RefreshCw,
-  Plus, Trash, Edit, Save, X, Download, Calendar
+  Plus, Trash, Edit, Save, X, Download, Eye, Printer
 } from 'lucide-react';
 
 function App() {
@@ -17,7 +16,7 @@ function App() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
 
-  // Profil Guru (Aman: Tanpa Hardcode NIP / TTD di Repo)
+  // Profil Guru
   const [profile, setProfile] = useState({ 
     full_name: localStorage.getItem('teacher_name') || '', 
     nip: localStorage.getItem('teacher_nip') || '', 
@@ -40,6 +39,10 @@ function App() {
   const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
   const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
 
+  // Modal Print Preview State
+  const [showPreviewModal, setShowPreviewModal] = useState(false);
+  const [previewData, setPreviewData] = useState(null);
+
   // Management Siswa
   const [allStudents, setAllStudents] = useState([]);
   const [searchStudentQuery, setSearchStudentQuery] = useState('');
@@ -50,7 +53,7 @@ function App() {
   // History Jurnal
   const [journalsHistory, setJournalsHistory] = useState([]);
 
-  // LOGIKA MAPEL KETAT BERDASARKAN KELAS
+  // LOGIKA MAPEL KETAT
   useEffect(() => {
     if (selectedClass === '7') {
       setSelectedSubject('Matematika');
@@ -117,7 +120,7 @@ function App() {
     }
   };
 
-  // UPLOAD TTD KONVERSI KE BASE64
+  // UPLOAD TTD BASE64
   const handleSignatureUpload = (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -265,34 +268,21 @@ function App() {
     setLoading(false);
   };
 
-  // EXPORT INDIVIDUAL SISWA
-  const handleExportIndividualPDF = async (student) => {
-    let studentAtt = [];
-    if (!isDemo) {
-      const { data } = await supabase
-        .from('attendance')
-        .select('status, date, notes')
-        .eq('student_id', student.id)
-        .order('date', { ascending: false });
-      if (data) studentAtt = data;
-    }
-
-    const rows = studentAtt.map((a, idx) => [
-      idx + 1,
-      new Date(a.date).toLocaleDateString('id-ID'),
-      a.status,
-      a.notes || '-'
-    ]);
-
-    printHTMLReport({
-      title: `REKAP PRESENSI INDIVIDUAL SISWA`,
-      subtitle: `Nama: ${student.name}  |  Kelas: ${student.class_name}`,
-      headers: ['NO', 'TANGGAL', 'STATUS KEHADIRAN', 'CATATAN'],
-      rows: rows.length > 0 ? rows : [[1, new Date().toLocaleDateString('id-ID'), 'Hadir (Default)', '-']],
-      teacherName: profile.full_name,
-      teacherNip: profile.nip,
-      signatureBase64: profile.signature_url
+  // PREPARE PREVIEW CETAK
+  const handleOpenPrintPreview = (title, subtitle, rows) => {
+    setPreviewData({
+      title,
+      subtitle,
+      rows,
+      teacherName: profile.full_name || 'NUR ALFI SYAHRI, S.P.',
+      teacherNip: profile.nip || '-------------------',
+      signatureUrl: profile.signature_url
     });
+    setShowPreviewModal(true);
+  };
+
+  const handleTriggerPrint = () => {
+    window.print();
   };
 
   const handleLogin = async (e) => {
@@ -358,8 +348,8 @@ function App() {
   return (
     <div className="min-h-screen bg-slate-100 pb-24 max-w-md mx-auto relative shadow-2xl border-x border-slate-200 font-sans">
       
-      {/* Top Mobile Bar */}
-      <div className="bg-blue-600 text-white p-4 sticky top-0 z-30 shadow-md rounded-b-2xl flex justify-between items-center">
+      {/* Top Mobile Bar (no-print) */}
+      <div className="no-print bg-blue-600 text-white p-4 sticky top-0 z-30 shadow-md rounded-b-2xl flex justify-between items-center">
         <div className="flex items-center space-x-3">
           <img 
             src="/logo.png" 
@@ -382,8 +372,8 @@ function App() {
         </button>
       </div>
 
-      {/* Main Content */}
-      <div className="p-4 space-y-4">
+      {/* Main Content (no-print) */}
+      <div className="no-print p-4 space-y-4">
 
         {/* TAB 1: INPUT JURNAL */}
         {activeTab === 'input' && (
@@ -609,11 +599,15 @@ function App() {
                         </div>
                         <div className="flex items-center space-x-1">
                           <button 
-                            onClick={() => handleExportIndividualPDF(student)} 
-                            title="Export PDF Siswa"
+                            onClick={() => handleOpenPrintPreview(
+                              `REKAP PRESENSI SISWA`,
+                              `Nama: ${student.name} | Kelas: ${student.class_name}`,
+                              [[1, new Date().toLocaleDateString('id-ID'), 'Hadir (Default)', '-']]
+                            )} 
+                            title="Preview PDF Siswa"
                             className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-lg"
                           >
-                            <Download className="w-4 h-4" />
+                            <Eye className="w-4 h-4" />
                           </button>
                           <button onClick={() => setEditingStudent(student)} className="p-1.5 text-slate-500 hover:text-blue-600">
                             <Edit className="w-4 h-4" />
@@ -682,25 +676,22 @@ function App() {
 
               <button 
                 onClick={() => {
-                  printHTMLReport({
-                    title: `REKAPITULASI PRESENSI & NILAI SISWA (${reportPeriod.toUpperCase()})`,
-                    subtitle: `SMPN 1 Damai  |  Kelas: ${selectedClass}  |  Mata Pelajaran: ${selectedSubject}`,
-                    headers: ['NO', 'NAMA LENGKAP SISWA', 'STATUS PRESENSI', 'NILAI HARIAN'],
-                    rows: students.map((s, idx) => [
-                      idx + 1, 
-                      s.name, 
-                      attendance[s.id] || 'Hadir', 
-                      grades[s.id] || '-'
-                    ]),
-                    teacherName: profile.full_name,
-                    teacherNip: profile.nip,
-                    signatureBase64: profile.signature_url
-                  });
+                  const rows = students.map((s, idx) => [
+                    idx + 1, 
+                    s.name, 
+                    attendance[s.id] || 'Hadir', 
+                    grades[s.id] || '-'
+                  ]);
+                  handleOpenPrintPreview(
+                    `REKAPITULASI PRESENSI & NILAI SISWA (${reportPeriod.toUpperCase()})`,
+                    `SMPN 1 Damai  |  Kelas: ${selectedClass}  |  Mata Pelajaran: ${selectedSubject}`,
+                    rows
+                  );
                 }}
                 className="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-3 rounded-xl font-bold text-xs flex items-center justify-center space-x-2 transition-all shadow"
               >
-                <FileText className="w-4 h-4" />
-                <span>Preview & Save as PDF Laporan</span>
+                <Eye className="w-4 h-4" />
+                <span>Preview Laporan & TTD</span>
               </button>
             </div>
 
@@ -754,8 +745,8 @@ function App() {
 
       </div>
 
-      {/* Navigation Footer */}
-      <div className="fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-white/95 backdrop-blur-md border-t border-slate-200 flex justify-around p-2 z-30 rounded-t-2xl shadow-lg">
+      {/* Floating Footer Navigation (no-print) */}
+      <div className="no-print fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-white/95 backdrop-blur-md border-t border-slate-200 flex justify-around p-2 z-30 rounded-t-2xl shadow-lg">
         <button onClick={() => setActiveTab('input')} className={`p-2 flex flex-col items-center ${activeTab === 'input' ? 'text-blue-600 font-bold scale-105' : 'text-slate-400'}`}>
           <BookOpen className="w-5 h-5" />
           <span className="text-[10px] mt-1">Jurnal</span>
@@ -773,6 +764,90 @@ function App() {
           <span className="text-[10px] mt-1">Profil</span>
         </button>
       </div>
+
+      {/* 🔥 MODAL PREVIEW DOKUMEN LAPORAN & CETAK SAVE AS PDF (IN-APP) */}
+      {showPreviewModal && previewData && (
+        <div className="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-sm flex flex-col justify-between p-2 overflow-y-auto">
+          {/* Header Action Modal */}
+          <div className="no-print bg-white p-3 rounded-2xl flex justify-between items-center shadow-lg mb-2 sticky top-0 z-10">
+            <button 
+              onClick={() => setShowPreviewModal(false)}
+              className="bg-slate-100 text-slate-700 px-3 py-1.5 rounded-xl text-xs font-bold flex items-center space-x-1"
+            >
+              <X className="w-4 h-4" />
+              <span>Tutup</span>
+            </button>
+
+            <button 
+              onClick={handleTriggerPrint}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl text-xs font-extrabold shadow flex items-center space-x-1.5"
+            >
+              <Printer className="w-4 h-4" />
+              <span>Cetak / Save as PDF</span>
+            </button>
+          </div>
+
+          {/* Area Dokumen Resmi (Dicetak) */}
+          <div className="bg-white p-4 rounded-xl text-slate-900 font-sans shadow-2xl mx-auto w-full max-w-xl text-[9pt] leading-tight">
+            {/* Kop Surat */}
+            <div className="text-center mb-1">
+              <h3 className="font-bold text-[10.5pt] uppercase p-0 m-0">PEMERINTAH KABUPATEN KUTAI BARAT</h3>
+              <h3 className="font-bold text-[11.5pt] uppercase p-0 m-0">DINAS PENDIDIKAN DAN KEBUDAYAAN</h3>
+              <h2 className="font-black text-[13.5pt] text-blue-900 uppercase p-0 m-0">SMP NEGERI 1 DAMAI</h2>
+              <p className="text-[7.5pt] italic text-slate-500 m-0">Jl. Poros Damai, Kecamatan Damai, Kabupaten Kutai Barat, Kalimantan Timur</p>
+            </div>
+            
+            <div className="border-t-2 border-black border-b-[0.8px] border-b-black h-[2px] my-2"></div>
+
+            {/* Judul Laporan */}
+            <div className="text-center mb-3">
+              <h4 className="font-bold text-[10pt] uppercase">{previewData.title}</h4>
+              {previewData.subtitle && <p className="text-[8pt] text-slate-600">{previewData.subtitle}</p>}
+            </div>
+
+            {/* Tabel Data Siswa */}
+            <table className="w-full border-collapse border border-slate-400 text-[8pt]">
+              <thead>
+                <tr className="bg-blue-600 text-white font-bold text-center">
+                  <th className="border border-slate-400 p-1 w-10">NO</th>
+                  <th className="border border-slate-400 p-1 text-left">NAMA LENGKAP SISWA</th>
+                  <th className="border border-slate-400 p-1 w-28">STATUS PRESENSI</th>
+                  <th className="border border-slate-400 p-1 w-20">NILAI</th>
+                </tr>
+              </thead>
+              <tbody>
+                {previewData.rows.map((row, idx) => (
+                  <tr key={idx} className={idx % 2 === 1 ? 'bg-slate-50' : 'bg-white'}>
+                    <td className="border border-slate-300 p-1 text-center font-medium">{row[0]}</td>
+                    <td className="border border-slate-300 p-1 font-bold">{row[1]}</td>
+                    <td className={`border border-slate-300 p-1 text-center font-bold ${row[2] === 'Hadir' ? 'text-emerald-700' : 'text-red-600'}`}>{row[2]}</td>
+                    <td className="border border-slate-300 p-1 text-center font-medium">{row[3]}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+
+            {/* Area TTD Guru */}
+            <div className="mt-4 flex justify-end">
+              <div className="w-48 text-left text-[8.5pt]">
+                <p>Damai, {new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
+                <p className="font-normal mb-1">Guru Mata Pelajaran,</p>
+                
+                <div className="h-12 my-1 flex items-center justify-start">
+                  {previewData.signatureUrl ? (
+                    <img src={previewData.signatureUrl} alt="TTD Guru" className="max-h-12 max-w-[150px] object-contain" />
+                  ) : (
+                    <div className="h-10 border-b border-dashed border-slate-300 w-full flex items-center text-[7pt] text-slate-400">(Belum ada foto TTD)</div>
+                  )}
+                </div>
+
+                <p className="font-bold underline text-[9pt]">{previewData.teacherName}</p>
+                <p className="text-[8pt] text-slate-600">NIP. {previewData.teacherNip}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );
