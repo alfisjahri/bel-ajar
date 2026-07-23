@@ -76,7 +76,7 @@ function App() {
   const [selectedSubject, setSelectedSubject] = useState('Matematika');
   const [material, setMaterial] = useState('');
   const [photoFiles, setPhotos] = useState([]);
-  const [photoPreviews, setPhotoPreviews] = useState([]); // Preview foto lokal sebelum submit
+  const [photoPreviews, setPhotoPreviews] = useState([]);
   const [students, setStudents] = useState([]);
   const [attendance, setAttendance] = useState({});
   const [grades, setGrades] = useState({});
@@ -171,7 +171,6 @@ function App() {
     if (activeTab === 'siswa') fetchAllStudents();
   }, [activeTab]);
 
-  // HANDLE PILIH FOTO + BIKIN PREVIEW LOKAL
   const handlePhotoSelect = (e) => {
     const files = Array.from(e.target.files);
     setPhotos(files);
@@ -447,7 +446,6 @@ function App() {
     setAttendance(att);
   };
 
-  // SUBMIT JURNAL + CONVERT ALL FOTO KE BASE64
   const handleSubmitJurnal = async () => {
     if (isDemo) return Toast.fire({ icon: 'info', title: 'Mode Demo: Data tidak tersimpan.' });
     if (!material.trim()) return Toast.fire({ icon: 'warning', title: 'Isi materi pembelajaran dulu!' });
@@ -699,7 +697,6 @@ function App() {
     );
   }
 
-  // LOGIKA SORTASI SISWA DENGAN CHIP FILTER
   const filteredAllStudents = allStudents.filter(s => {
     const matchesSearch = s.name.toLowerCase().includes(searchStudentQuery.toLowerCase()) ||
                           s.class_name.toLowerCase().includes(searchStudentQuery.toLowerCase());
@@ -804,7 +801,6 @@ function App() {
                   className="w-full text-xs text-slate-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-blue-50 file:text-blue-600"
                 />
                 
-                {/* PREVIEW LOKAL FOTO TERPILIH */}
                 {photoPreviews.length > 0 && (
                   <div className="mt-2 space-y-1">
                     <p className="text-[10px] text-emerald-600 font-bold">✓ {photoPreviews.length} foto terpilih untuk di-upload:</p>
@@ -1009,7 +1005,6 @@ function App() {
                       <p className="text-xs text-slate-700 font-semibold">{j.material}</p>
                     )}
 
-                    {/* FOTO DOKUMENTASI TERANAM DENGAN MANIS */}
                     {Array.isArray(photoList) && photoList.length > 0 && (
                       <div className="pt-2 border-t border-slate-100">
                         <p className="text-[10px] font-bold text-slate-400 mb-1.5 flex items-center gap-1">
@@ -1086,7 +1081,7 @@ function App() {
                 />
               </div>
 
-              {/* 🔥 TOMBOL CHIP SORTASI SISWA ABSEN/PRESENSI */}
+              {/* CHIP SORTASI PRESENSI SISWA */}
               <div className="flex items-center gap-1.5 pt-1 overflow-x-auto">
                 <span className="text-[10px] font-bold text-slate-400 mr-1 flex items-center gap-0.5">
                   <Filter className="w-3 h-3" /> Filter:
@@ -1180,7 +1175,7 @@ function App() {
           </div>
         )}
 
-        {/* TAB 4: PROFIL GURU & EXPORT REKAP PERIODIK */}
+        {/* 🔥 TAB 4: EXPORT LAPORAN REKAP & PROFIL GURU */}
         {activeTab === 'profile' && (
           <div className="space-y-4">
             <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-3">
@@ -1329,7 +1324,7 @@ function App() {
 
       </div>
 
-      {/* Floating Footer Navigation */}
+      {/* 🔥 FLOATING FOOTER NAVIGATION (TAB PROFIL UDAH DIGANTI EXPORT) */}
       <div className="no-print fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-white/95 backdrop-blur-md border-t border-slate-200 flex justify-around p-2 z-30 rounded-t-2xl shadow-lg">
         <button onClick={() => setActiveTab('input')} className={`p-2 flex flex-col items-center ${activeTab === 'input' ? 'text-blue-600 font-bold scale-105' : 'text-slate-400'}`}>
           <BookOpen className="w-5 h-5" />
@@ -1344,25 +1339,12 @@ function App() {
           <span className="text-[10px] mt-1">Siswa</span>
         </button>
         <button onClick={() => setActiveTab('profile')} className={`p-2 flex flex-col items-center ${activeTab === 'profile' ? 'text-blue-600 font-bold scale-105' : 'text-slate-400'}`}>
-          <UserCheck className="w-5 h-5" />
-          <span className="text-[10px] mt-1">Profil</span>
+          <FileText className="w-5 h-5" />
+          <span className="text-[10px] mt-1">Export</span>
         </button>
       </div>
 
-      {/* MODAL LIGHTBOX FOTO PREVIEW */}
-      {selectedImageModal && (
-        <div className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4">
-          <button 
-            onClick={() => setSelectedImageModal(null)}
-            className="absolute top-4 right-4 bg-white/20 text-white p-2 rounded-full hover:bg-white/40"
-          >
-            <X className="w-6 h-6" />
-          </button>
-          <img src={selectedImageModal} alt="Preview Dokumentasi Full" className="max-w-full max-h-[85vh] object-contain rounded-2xl shadow-2xl" />
-        </div>
-      )}
-
-      {/* MODAL DETAIL MATERI TERTINGGAL */}
+      {/* MODAL DETAIL MATERI TERTINGGAL (Z-INDEX 50) */}
       {studentAbsenceDetails && (
         <div className="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
           <div className="bg-white rounded-3xl p-5 w-full max-w-sm space-y-3 shadow-2xl">
@@ -1387,7 +1369,7 @@ function App() {
                   {d.photos && d.photos.length > 0 && (
                     <div className="flex gap-1.5 pt-1 overflow-x-auto">
                       {d.photos.map((p, i) => (
-                        <img key={i} src={p} onClick={() => setSelectedImageModal(p)} alt="Foto Materi" className="w-12 h-12 object-cover rounded-lg border cursor-pointer" />
+                        <img key={i} src={p} onClick={() => setSelectedImageModal(p)} alt="Foto Materi" className="w-12 h-12 object-cover rounded-lg border cursor-pointer hover:opacity-80 active:scale-95" />
                       ))}
                     </div>
                   )}
@@ -1399,6 +1381,23 @@ function App() {
               Tutup
             </button>
           </div>
+        </div>
+      )}
+
+      {/* 🔥 MODAL LIGHTBOX FOTO PREVIEW FULLSCREEN (Z-INDEX 70 AGAR SELALU DI DEPAN MODAL APAPUN) */}
+      {selectedImageModal && (
+        <div className="fixed inset-0 z-[70] bg-black/90 backdrop-blur-md flex items-center justify-center p-4">
+          <button 
+            onClick={() => setSelectedImageModal(null)}
+            className="absolute top-4 right-4 bg-white/20 text-white p-2 rounded-full hover:bg-white/40 active:scale-90 transition-all z-10"
+          >
+            <X className="w-6 h-6" />
+          </button>
+          <img 
+            src={selectedImageModal} 
+            alt="Preview Dokumentasi Full" 
+            className="max-w-full max-h-[85vh] object-contain rounded-2xl shadow-2xl border border-white/20" 
+          />
         </div>
       )}
 
