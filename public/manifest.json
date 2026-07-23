@@ -1,7 +1,7 @@
 {
   "name": "Bel Ajar - Jurnal Mengajar SMP",
   "short_name": "Bel Ajar",
-  "description": "Aplikasi Jurnal Mengajar, Presensi & Nilai SMPN 1 Damai",
+  "description": "Aplikasi Jurnal Mengajar Digital SMPN 1 Damai",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#2563eb",
@@ -11,14 +11,13 @@
       "src": "/logo.png",
       "sizes": "192x192",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
     },
     {
       "src": "/logo.png",
       "sizes": "512x512",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
     }
   ]
 }
-
