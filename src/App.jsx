@@ -22,7 +22,7 @@ function App() {
     nip: localStorage.getItem('teacher_nip') || '', 
     signature_url: localStorage.getItem('teacher_sig') || '' 
   });
-  const [isProfileOpen, setIsProfileOpen] = useState(false); // Default Hide Accordion Profil
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
 
   // Form State Jurnal
   const [selectedClass, setSelectedClass] = useState('7');
@@ -160,7 +160,8 @@ function App() {
     if (isDemo) {
       const mockData = [
         { id: '1', name: 'AERELLYN BELVIA', class_name: className },
-        { id: '2', name: 'AFIFATUL AZIZAH', class_name: className }
+        { id: '2', name: 'AFIFATUL AZIZAH', class_name: className },
+        { id: '3', name: 'AGRIFINA TRIZIA', class_name: className }
       ];
       setStudents(mockData);
       initAttendance(mockData);
@@ -284,12 +285,12 @@ function App() {
     setLoading(false);
   };
 
-  // 🔥 PREPARE PREVIEW CETAK (JABATAN TTD MENYESUAIKAN MAPEL)
+  // PREPARE PREVIEW CETAK
   const handleOpenPrintPreview = (title, subtitle, subjectName, rows) => {
     setPreviewData({
       title,
       subtitle,
-      subjectRole: `Guru Mata Pelajaran ${subjectName}`, // Dinamis mengikuti Mapel
+      subjectRole: `Guru Mata Pelajaran ${subjectName}`,
       rows,
       teacherName: profile.full_name || 'NUR ALFI SYAHRI, S.P.',
       teacherNip: profile.nip || '-------------------',
@@ -448,12 +449,12 @@ function App() {
               </div>
             </div>
 
-            {/* Presensi Siswa */}
+            {/* 🔥 PRESENSI RADIO BUTTON CARD (H / S / I / A) SANGAT PRESISI LIKE 232448.JPG */}
             <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm space-y-3">
               <div className="flex justify-between items-center border-b pb-2">
                 <div className="flex items-center space-x-2">
                   <Users className="w-4 h-4 text-blue-600" />
-                  <h3 className="font-extrabold text-slate-800 text-xs">Siswa Kelas {selectedClass} ({students.length})</h3>
+                  <h3 className="font-extrabold text-slate-800 text-xs">Presensi Siswa Kelas {selectedClass} ({students.length})</h3>
                 </div>
                 {fetchingStudents && <RefreshCw className="w-3.5 h-3.5 text-blue-600 animate-spin" />}
               </div>
@@ -461,33 +462,45 @@ function App() {
               {students.length === 0 ? (
                 <p className="text-xs text-center text-slate-400 py-6">Tidak ada data siswa untuk Kelas {selectedClass}</p>
               ) : (
-                <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
-                  {students.map((student) => (
-                    <div key={student.id} className="p-2.5 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between gap-2">
-                      <p className="font-bold text-xs text-slate-800 truncate flex-1">{student.name}</p>
+                <div className="space-y-3 max-h-96 overflow-y-auto pr-1">
+                  {students.map((student, idx) => (
+                    <div key={student.id} className="p-3 bg-white border border-slate-200 rounded-2xl shadow-sm space-y-2">
+                      <p className="font-extrabold text-xs text-slate-800">{idx + 1}. {student.name}</p>
 
-                      <div className="flex items-center space-x-1.5">
-                        <select 
-                          value={attendance[student.id] || 'Hadir'}
-                          onChange={e => setAttendance({...attendance, [student.id]: e.target.value})}
-                          className={`text-[11px] p-1 rounded-lg border font-bold ${
-                            attendance[student.id] === 'Sakit' ? 'bg-amber-100 text-amber-800' :
-                            attendance[student.id] === 'Izin' ? 'bg-blue-100 text-blue-800' :
-                            attendance[student.id] === 'Alfa' ? 'bg-red-100 text-red-800' :
-                            'bg-emerald-50 text-emerald-700'
-                          }`}
-                        >
-                          <option value="Hadir">Hadir</option>
-                          <option value="Sakit">Sakit</option>
-                          <option value="Izin">Izin</option>
-                          <option value="Alfa">Alfa</option>
-                        </select>
+                      <div className="p-2.5 bg-slate-50/80 border border-slate-200/70 rounded-xl flex items-center justify-between">
+                        {/* Radio Options: H, S, I, A */}
+                        <div className="flex items-center space-x-3.5">
+                          {[
+                            { code: 'Hadir', label: 'H', color: 'text-emerald-600' },
+                            { code: 'Sakit', label: 'S', color: 'text-amber-600' },
+                            { code: 'Izin', label: 'I', color: 'text-blue-600' },
+                            { code: 'Alfa', label: 'A', color: 'text-red-600' },
+                          ].map(item => (
+                            <label key={item.code} className="flex flex-col items-center cursor-pointer select-none">
+                              <span className={`text-[11px] font-black ${item.color} mb-1`}>{item.label}</span>
+                              <input 
+                                type="radio" 
+                                name={`att-${student.id}`} 
+                                value={item.code}
+                                checked={(attendance[student.id] || 'Hadir') === item.code}
+                                onChange={() => setAttendance({ ...attendance, [student.id]: item.code })}
+                                className="w-4 h-4 accent-blue-600 cursor-pointer"
+                              />
+                            </label>
+                          ))}
+                        </div>
 
-                        <input 
-                          type="number" placeholder="Nilai" 
-                          className="w-12 text-xs p-1 border rounded-lg text-center font-semibold bg-white"
-                          onChange={e => setGrades({...grades, [student.id]: e.target.value})}
-                        />
+                        {/* Nilai Input Card */}
+                        <div className="border-l border-slate-200 pl-3 flex flex-col items-center">
+                          <span className="text-[9px] font-bold text-slate-400 uppercase mb-0.5">NILAI</span>
+                          <input 
+                            type="number" 
+                            placeholder="-" 
+                            className="w-12 text-xs p-1 border border-slate-200 rounded-lg text-center font-bold bg-white focus:ring-1 focus:ring-blue-500"
+                            value={grades[student.id] || ''}
+                            onChange={e => setGrades({...grades, [student.id]: e.target.value})}
+                          />
+                        </div>
                       </div>
                     </div>
                   ))}
@@ -719,7 +732,7 @@ function App() {
                   handleOpenPrintPreview(
                     `REKAPITULASI PRESENSI & NILAI SISWA (${reportPeriod.toUpperCase()})`,
                     `SMPN 1 Damai  |  Kelas: ${reportClass}  |  Mata Pelajaran: ${reportSubject}`,
-                    reportSubject, // Mengirim nama Mapel dinamis untuk TTD
+                    reportSubject,
                     rows
                   );
                 }}
@@ -730,9 +743,8 @@ function App() {
               </button>
             </div>
 
-            {/* 🔥 CARD 2: PROFIL & TTD PERMANEN (DROPDOWN AUTO-HIDE / COLLAPSIBLE) */}
+            {/* CARD 2: PROFIL & TTD PERMANEN (DROPDOWN AUTO-HIDE) */}
             <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden transition-all">
-              {/* Header Toggle Accordion */}
               <button 
                 onClick={() => setIsProfileOpen(!isProfileOpen)}
                 className="w-full p-4 flex justify-between items-center bg-slate-50/80 hover:bg-slate-100 transition-colors"
@@ -744,7 +756,6 @@ function App() {
                 {isProfileOpen ? <ChevronUp className="w-4 h-4 text-slate-500" /> : <ChevronDown className="w-4 h-4 text-slate-500" />}
               </button>
 
-              {/* Isi Form Profil (Sembunyi/Auto-Hide jika isProfileOpen false) */}
               {isProfileOpen && (
                 <div className="p-4 border-t border-slate-100 space-y-3 bg-white">
                   <div>
@@ -816,10 +827,10 @@ function App() {
         </button>
       </div>
 
-      {/* MODAL PREVIEW DOKUMEN LAPORAN & CETAK SAVE AS PDF */}
+      {/* 🔥 MODAL PREVIEW DOKUMEN LAPORAN & CETAK SAVE AS PDF (LOGOS & KOP SURAT 100% PERSIS) */}
       {showPreviewModal && previewData && (
         <div className="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-sm flex flex-col justify-between p-2 overflow-y-auto">
-          {/* Header Action Modal */}
+          {/* Action Header Modal */}
           <div className="no-print bg-white p-3 rounded-2xl flex justify-between items-center shadow-lg mb-2 sticky top-0 z-10">
             <button 
               onClick={() => setShowPreviewModal(false)}
@@ -838,51 +849,76 @@ function App() {
             </button>
           </div>
 
-          {/* Area Dokumen Resmi (Dicetak) */}
-          <div className="bg-white p-4 rounded-xl text-slate-900 font-sans shadow-2xl mx-auto w-full max-w-xl text-[9pt] leading-tight">
-            {/* Kop Surat */}
-            <div className="text-center mb-1">
-              <h3 className="font-bold text-[10.5pt] uppercase p-0 m-0">PEMERINTAH KABUPATEN KUTAI BARAT</h3>
-              <h3 className="font-bold text-[11.5pt] uppercase p-0 m-0">DINAS PENDIDIKAN DAN KEBUDAYAAN</h3>
-              <h2 className="font-black text-[13.5pt] text-blue-900 uppercase p-0 m-0">SMP NEGERI 1 DAMAI</h2>
-              <p className="text-[7.5pt] italic text-slate-500 m-0">Jl. Poros Damai, Kecamatan Damai, Kabupaten Kutai Barat, Kalimantan Timur</p>
-            </div>
+          {/* Area Dokumen Resmi (Kop Surat & Logos 232447.jpg) */}
+          <div className="bg-white p-4 rounded-xl text-slate-900 font-serif shadow-2xl mx-auto w-full max-w-xl text-[9pt] leading-tight">
             
-            <div className="border-t-2 border-black border-b-[0.8px] border-b-black h-[2px] my-2"></div>
+            {/* KOP SURAT RESMI DENGAN 2 LOGO */}
+            <div className="flex items-center justify-between gap-2 mb-1">
+              {/* Logo Pemkab Kutai Barat (Kiri) */}
+              <img 
+                src="/logo-kubar.png" 
+                alt="Logo Pemkab Kutai Barat" 
+                onError={(e) => { e.target.onerror = null; e.target.src = 'https://upload.wikimedia.org/wikipedia/commons/2/23/Coat_of_arms_of_West_Kutai_Regency.png'; }}
+                className="w-16 h-20 object-contain"
+              />
+
+              {/* Teks Tengah Kop Surat */}
+              <div className="text-center flex-1">
+                <h3 className="font-bold text-[10.5pt] uppercase tracking-wide m-0 p-0">PEMERINTAH KABUPATEN KUTAI BARAT</h3>
+                <h3 className="font-bold text-[11.5pt] uppercase tracking-wide m-0 p-0">DINAS PENDIDIKAN DAN KEBUDAYAAN</h3>
+                <h2 className="font-black text-[13.5pt] uppercase tracking-wider m-0 p-0">SMP NEGERI 1 DAMAI</h2>
+                <p className="font-bold text-[8.5pt] m-0 p-0 mt-0.5">
+                  <u>NSS : 20.1.16.09.08.001</u> &nbsp;&nbsp; <u>NPSN : 30400615</u> &nbsp;&nbsp; <u>NIS : 200070</u>
+                </p>
+                <p className="text-[7.5pt] m-0 p-0 italic">
+                  Jalan Temanggung Gamas RT.1 No.27 Damai Kota - Kode Pos 75777
+                </p>
+              </div>
+
+              {/* Logo SMPN 1 Damai (Kanan) */}
+              <img 
+                src="/logo-smp.png" 
+                alt="Logo SMPN 1 Damai" 
+                onError={(e) => { e.target.onerror = null; e.target.src = '/logo.png'; }}
+                className="w-16 h-20 object-contain"
+              />
+            </div>
+
+            {/* Garis Tebal Ganda Kop Surat */}
+            <div className="border-t-[2.5px] border-black border-b-[0.8px] border-b-black h-[2px] my-1.5"></div>
 
             {/* Judul Laporan */}
-            <div className="text-center mb-3">
-              <h4 className="font-bold text-[10pt] uppercase">{previewData.title}</h4>
-              {previewData.subtitle && <p className="text-[8pt] text-slate-600">{previewData.subtitle}</p>}
+            <div className="text-center my-3">
+              <h4 className="font-bold text-[10.5pt] uppercase underline">{previewData.title}</h4>
+              {previewData.subtitle && <p className="text-[8.5pt] text-slate-700 font-sans mt-0.5">{previewData.subtitle}</p>}
             </div>
 
             {/* Tabel Data Siswa */}
-            <table className="w-full border-collapse border border-slate-400 text-[8pt]">
+            <table className="w-full border-collapse border border-slate-900 text-[8pt] font-sans">
               <thead>
-                <tr className="bg-blue-600 text-white font-bold text-center">
-                  <th className="border border-slate-400 p-1 w-10">NO</th>
-                  <th className="border border-slate-400 p-1 text-left">NAMA LENGKAP SISWA</th>
-                  <th className="border border-slate-400 p-1 w-28">STATUS PRESENSI</th>
-                  <th className="border border-slate-400 p-1 w-20">NILAI</th>
+                <tr className="bg-slate-200 text-slate-900 font-bold text-center">
+                  <th className="border border-slate-900 p-1 w-10">NO</th>
+                  <th className="border border-slate-900 p-1 text-left">NAMA LENGKAP SISWA</th>
+                  <th className="border border-slate-900 p-1 w-28">STATUS PRESENSI</th>
+                  <th className="border border-slate-900 p-1 w-20">NILAI</th>
                 </tr>
               </thead>
               <tbody>
                 {previewData.rows.map((row, idx) => (
                   <tr key={idx} className={idx % 2 === 1 ? 'bg-slate-50' : 'bg-white'}>
-                    <td className="border border-slate-300 p-1 text-center font-medium">{row[0]}</td>
-                    <td className="border border-slate-300 p-1 font-bold">{row[1]}</td>
-                    <td className={`border border-slate-300 p-1 text-center font-bold ${row[2] === 'Hadir' ? 'text-emerald-700' : 'text-red-600'}`}>{row[2]}</td>
-                    <td className="border border-slate-300 p-1 text-center font-medium">{row[3]}</td>
+                    <td className="border border-slate-800 p-1 text-center font-medium">{row[0]}</td>
+                    <td className="border border-slate-800 p-1 font-bold">{row[1]}</td>
+                    <td className={`border border-slate-800 p-1 text-center font-bold ${row[2] === 'Hadir' ? 'text-emerald-700' : 'text-red-600'}`}>{row[2]}</td>
+                    <td className="border border-slate-800 p-1 text-center font-medium">{row[3]}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
 
-            {/* Area TTD Guru (Dinamis Menyesuaikan Mapel) */}
-            <div className="mt-4 flex justify-end">
-              <div className="w-52 text-left text-[8.5pt]">
+            {/* Area TTD Guru Dinamis Sesuai Mapel */}
+            <div className="mt-4 flex justify-end font-sans">
+              <div className="w-56 text-left text-[8.5pt]">
                 <p>Damai, {new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
-                {/* 🔥 Disesuaikan dengan Mapel Laporan */}
                 <p className="font-normal mb-1">{previewData.subjectRole},</p>
                 
                 <div className="h-12 my-1 flex items-center justify-start">
