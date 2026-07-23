@@ -580,7 +580,7 @@ function App() {
     setShowPreviewModal(true);
   };
 
-  // 🔥 QUERY DATA PRESENSI & NILAI REAL UNTUK EXPORT LAPORAN
+  // 🔥 QUERY DATA PRESENSI & NILAI REAL DARI DATABASE UNTUK TAB EXPORT
   const handleTriggerExportPreview = async () => {
     setLoading(true);
     let targetStudents = [];
@@ -599,7 +599,7 @@ function App() {
       if (data) targetStudents = data;
     }
 
-    // Hitung Rentang Tanggal
+    // Hitung Rentang Tanggal Secara Presisi
     let fromDate = new Date();
     let toDate = new Date();
 
@@ -608,14 +608,19 @@ function App() {
       toDate.setHours(23, 59, 59, 999);
     } else if (reportPeriod === 'mingguan') {
       fromDate.setDate(fromDate.getDate() - 7);
+      fromDate.setHours(0, 0, 0, 0);
+      toDate.setHours(23, 59, 59, 999);
     } else if (reportPeriod === 'bulanan') {
-      fromDate = new Date(fromDate.getFullYear(), fromDate.getMonth(), 1);
+      fromDate = new Date(fromDate.getFullYear(), fromDate.getMonth(), 1, 0, 0, 0, 0);
+      toDate = new Date(fromDate.getFullYear(), fromDate.getMonth() + 1, 0, 23, 59, 59, 999);
     } else if (reportPeriod === 'semester') {
       const currentMonth = fromDate.getMonth();
       const semesterStartMonth = currentMonth >= 6 ? 6 : 0;
-      fromDate = new Date(fromDate.getFullYear(), semesterStartMonth, 1);
+      fromDate = new Date(fromDate.getFullYear(), semesterStartMonth, 1, 0, 0, 0, 0);
+      toDate.setHours(23, 59, 59, 999);
     } else if (reportPeriod === 'custom') {
       fromDate = new Date(startDate);
+      fromDate.setHours(0, 0, 0, 0);
       toDate = new Date(endDate);
       toDate.setHours(23, 59, 59, 999);
     }
@@ -624,7 +629,7 @@ function App() {
     let gradeSummaryMap = {};
 
     if (!isDemo && targetStudents.length > 0) {
-      // 1. Cari Jurnal di periode & mapel terkait
+      // 1. Query Jurnal di kelas & mapel pilihan
       const { data: matchedJournals } = await supabase
         .from('journals')
         .select('id, created_at')
@@ -670,7 +675,7 @@ function App() {
       }
     }
 
-    // Susun Baris Tabel Ekspor
+    // Susun Baris Laporan
     const rows = targetStudents.map((s, idx) => {
       const attInfo = attSummaryMap[s.id];
       const gradeList = gradeSummaryMap[s.id];
@@ -681,10 +686,12 @@ function App() {
           attDisplay = attInfo.lastStatus || '-';
         } else {
           const totalMeetings = attInfo.H + attInfo.S + attInfo.I + attInfo.A;
-          if (totalMeetings === attInfo.H) {
-            attDisplay = `Hadir (${attInfo.H}x)`;
-          } else {
-            attDisplay = `H:${attInfo.H} S:${attInfo.S} I:${attInfo.I} A:${attInfo.A}`;
+          if (totalMeetings > 0) {
+            if (totalMeetings === attInfo.H) {
+              attDisplay = `Hadir (${attInfo.H}x)`;
+            } else {
+              attDisplay = `H:${attInfo.H} S:${attInfo.S} I:${attInfo.I} A:${attInfo.A}`;
+            }
           }
         }
       }
@@ -1369,7 +1376,7 @@ function App() {
                 </div>
               )}
 
-              {/* 🔥 EXPORT DENGAN REAL QUERY DATA PRESENSI & NILAI DARI DATABASE */}
+              {/* 🔥 FIX PASTI: MANGGIL FUNGSI handleTriggerExportPreview */}
               <button 
                 onClick={handleTriggerExportPreview} disabled={loading}
                 className="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-3 rounded-xl font-bold text-xs flex items-center justify-center space-x-2 transition-all shadow"
