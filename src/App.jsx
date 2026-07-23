@@ -580,7 +580,7 @@ function App() {
     setShowPreviewModal(true);
   };
 
-  // 🔥 FIX BAZOOKA: FETCH SISWA YANG BENAR-BENAR SESUAI `reportClass` UNTUK TAB EXPORT
+  // 🔥 QUERY DATA PRESENSI & NILAI REAL UNTUK EXPORT LAPORAN
   const handleTriggerExportPreview = async () => {
     setLoading(true);
     let targetStudents = [];
@@ -599,12 +599,109 @@ function App() {
       if (data) targetStudents = data;
     }
 
-    const rows = targetStudents.map((s, idx) => [
-      idx + 1, 
-      s.name, 
-      attendance[s.id] || 'Hadir', 
-      grades[s.id] || '-'
-    ]);
+    // Hitung Rentang Tanggal
+    let fromDate = new Date();
+    let toDate = new Date();
+
+    if (reportPeriod === 'harian') {
+      fromDate.setHours(0, 0, 0, 0);
+      toDate.setHours(23, 59, 59, 999);
+    } else if (reportPeriod === 'mingguan') {
+      fromDate.setDate(fromDate.getDate() - 7);
+    } else if (reportPeriod === 'bulanan') {
+      fromDate = new Date(fromDate.getFullYear(), fromDate.getMonth(), 1);
+    } else if (reportPeriod === 'semester') {
+      const currentMonth = fromDate.getMonth();
+      const semesterStartMonth = currentMonth >= 6 ? 6 : 0;
+      fromDate = new Date(fromDate.getFullYear(), semesterStartMonth, 1);
+    } else if (reportPeriod === 'custom') {
+      fromDate = new Date(startDate);
+      toDate = new Date(endDate);
+      toDate.setHours(23, 59, 59, 999);
+    }
+
+    let attSummaryMap = {};
+    let gradeSummaryMap = {};
+
+    if (!isDemo && targetStudents.length > 0) {
+      // 1. Cari Jurnal di periode & mapel terkait
+      const { data: matchedJournals } = await supabase
+        .from('journals')
+        .select('id, created_at')
+        .eq('class_name', reportClass)
+        .eq('subject', reportSubject)
+        .gte('created_at', fromDate.toISOString())
+        .lte('created_at', toDate.toISOString());
+
+      if (matchedJournals && matchedJournals.length > 0) {
+        const journalIds = matchedJournals.map(j => j.id);
+
+        // 2. Fetch Presensi Real
+        const { data: attData } = await supabase
+          .from('attendance')
+          .select('student_id, status')
+          .in('journal_id', journalIds);
+
+        // 3. Fetch Nilai Real
+        const { data: gradeData } = await supabase
+          .from('grades')
+          .select('student_id, score')
+          .in('journal_id', journalIds);
+
+        if (attData) {
+          attData.forEach(a => {
+            if (!attSummaryMap[a.student_id]) {
+              attSummaryMap[a.student_id] = { H: 0, S: 0, I: 0, A: 0, lastStatus: a.status };
+            }
+            if (a.status === 'Hadir') attSummaryMap[a.student_id].H++;
+            else if (a.status === 'Sakit') attSummaryMap[a.student_id].S++;
+            else if (a.status === 'Izin') attSummaryMap[a.student_id].I++;
+            else if (a.status === 'Alfa') attSummaryMap[a.student_id].A++;
+            attSummaryMap[a.student_id].lastStatus = a.status;
+          });
+        }
+
+        if (gradeData) {
+          gradeData.forEach(g => {
+            if (!gradeSummaryMap[g.student_id]) gradeSummaryMap[g.student_id] = [];
+            gradeSummaryMap[g.student_id].push(g.score);
+          });
+        }
+      }
+    }
+
+    // Susun Baris Tabel Ekspor
+    const rows = targetStudents.map((s, idx) => {
+      const attInfo = attSummaryMap[s.id];
+      const gradeList = gradeSummaryMap[s.id];
+
+      let attDisplay = '-';
+      if (attInfo) {
+        if (reportPeriod === 'harian') {
+          attDisplay = attInfo.lastStatus || '-';
+        } else {
+          const totalMeetings = attInfo.H + attInfo.S + attInfo.I + attInfo.A;
+          if (totalMeetings === attInfo.H) {
+            attDisplay = `Hadir (${attInfo.H}x)`;
+          } else {
+            attDisplay = `H:${attInfo.H} S:${attInfo.S} I:${attInfo.I} A:${attInfo.A}`;
+          }
+        }
+      }
+
+      let gradeDisplay = '-';
+      if (gradeList && gradeList.length > 0) {
+        const avg = (gradeList.reduce((a, b) => a + b, 0) / gradeList.length).toFixed(0);
+        gradeDisplay = avg;
+      }
+
+      return [
+        idx + 1,
+        s.name,
+        attDisplay,
+        gradeDisplay
+      ];
+    });
 
     handleOpenPrintPreview(
       `REKAPITULASI PRESENSI & NILAI SISWA (${reportPeriod.toUpperCase()})`,
@@ -1272,13 +1369,13 @@ function App() {
                 </div>
               )}
 
-              {/* 🔥 TOMBOL EXPORT DENGAN FETCH SISWA DINAMIS SESUAI reportClass */}
+              {/* 🔥 EXPORT DENGAN REAL QUERY DATA PRESENSI & NILAI DARI DATABASE */}
               <button 
                 onClick={handleTriggerExportPreview} disabled={loading}
                 className="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-3 rounded-xl font-bold text-xs flex items-center justify-center space-x-2 transition-all shadow"
               >
                 <Eye className="w-4 h-4" />
-                <span>{loading ? 'Memuat Data Siswa...' : 'Preview Laporan & TTD'}</span>
+                <span>{loading ? 'Mengambil Data Real...' : 'Preview Laporan & TTD'}</span>
               </button>
             </div>
 
@@ -1365,7 +1462,7 @@ function App() {
         </button>
       </div>
 
-      {/* MODAL DETAIL MATERI TERTINGGAL (Z-INDEX 50) */}
+      {/* MODAL DETAIL MATERI TERTINGGAL */}
       {studentAbsenceDetails && (
         <div className="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
           <div className="bg-white rounded-3xl p-5 w-full max-w-sm space-y-3 shadow-2xl">
@@ -1405,7 +1502,7 @@ function App() {
         </div>
       )}
 
-      {/* MODAL LIGHTBOX FOTO PREVIEW FULLSCREEN (Z-INDEX 70) */}
+      {/* MODAL LIGHTBOX FOTO PREVIEW FULLSCREEN */}
       {selectedImageModal && (
         <div className="fixed inset-0 z-[70] bg-black/90 backdrop-blur-md flex items-center justify-center p-4">
           <button 
@@ -1507,7 +1604,7 @@ function App() {
                     <tr key={idx} className={idx % 2 === 1 ? 'bg-slate-50' : 'bg-white'}>
                       <td className="border border-slate-800 p-1 text-center font-medium">{row[0]}</td>
                       <td className="border border-slate-800 p-1 font-bold">{row[1]}</td>
-                      <td className={`border border-slate-800 p-1 text-center font-bold ${row[2] === 'Hadir' ? 'text-emerald-700' : 'text-red-600'}`}>{row[2]}</td>
+                      <td className={`border border-slate-800 p-1 text-center font-bold ${row[2] === 'Hadir' || row[2].startsWith('Hadir') ? 'text-emerald-700' : 'text-slate-800'}`}>{row[2]}</td>
                       <td className="border border-slate-800 p-1 text-center font-medium">{row[3]}</td>
                     </tr>
                   ))
