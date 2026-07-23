@@ -21,7 +21,7 @@ const Toast = Swal.mixin({
   timerProgressBar: true
 });
 
-// 🔥 HELPER KOMPRESI & CONVERT FOTO DOKUMENTASI KE BASE64 (100% PASTI TERSIMPAN & MUNCUL)
+// COMPRESS & CONVERT FOTO KE BASE64
 const compressImageToBase64 = (file) => {
   return new Promise((resolve) => {
     const reader = new FileReader();
@@ -31,7 +31,7 @@ const compressImageToBase64 = (file) => {
       img.src = event.target.result;
       img.onload = () => {
         const canvas = document.createElement('canvas');
-        const MAX_WIDTH = 800; // Kompres ukuran max lebar 800px agar hemat database
+        const MAX_WIDTH = 600; 
         const scaleSize = MAX_WIDTH / img.width;
         
         if (img.width > MAX_WIDTH) {
@@ -44,8 +44,7 @@ const compressImageToBase64 = (file) => {
 
         const ctx = canvas.getContext('2d');
         ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-        // Convert ke WebP/JPEG kualitas 0.7
-        const compressedBase64 = canvas.toDataURL('image/jpeg', 0.7);
+        const compressedBase64 = canvas.toDataURL('image/jpeg', 0.6);
         resolve(compressedBase64);
       };
     };
@@ -57,7 +56,7 @@ function App() {
   const [isDemo, setIsDemo] = useState(false);
   const [activeTab, setActiveTab] = useState('input');
 
-  // Auth & Lockout State (Max 3x Coba)
+  // Auth & Lockout State
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loginAttempts, setLoginAttempts] = useState(() => parseInt(localStorage.getItem('login_attempts') || '0'));
@@ -76,7 +75,8 @@ function App() {
   const [selectedClass, setSelectedClass] = useState('7');
   const [selectedSubject, setSelectedSubject] = useState('Matematika');
   const [material, setMaterial] = useState('');
-  const [photos, setPhotos] = useState([]);
+  const [photoFiles, setPhotos] = useState([]);
+  const [photoPreviews, setPhotoPreviews] = useState([]); // Preview foto lokal sebelum submit
   const [students, setStudents] = useState([]);
   const [attendance, setAttendance] = useState({});
   const [grades, setGrades] = useState({});
@@ -95,10 +95,10 @@ function App() {
   const [previewData, setPreviewData] = useState(null);
   const [selectedImageModal, setSelectedImageModal] = useState(null);
 
-  // Management Siswa & Filter Sortasi Presensi Siswa
+  // Management Siswa & Filter Sortasi
   const [allStudents, setAllStudents] = useState([]);
   const [searchStudentQuery, setSearchStudentQuery] = useState('');
-  const [attendanceFilter, setAttendanceFilter] = useState('ALL');
+  const [attendanceFilter, setAttendanceFilter] = useState('ALL'); 
   const [attendanceRecordsAll, setAttendanceRecordsAll] = useState([]);
   const [isAddingStudent, setIsAddingStudent] = useState(false);
   const [newStudent, setNewStudent] = useState({ name: '', class_name: '7' });
@@ -170,6 +170,15 @@ function App() {
     if (activeTab === 'edit') fetchJournalsHistory();
     if (activeTab === 'siswa') fetchAllStudents();
   }, [activeTab]);
+
+  // HANDLE PILIH FOTO + BIKIN PREVIEW LOKAL
+  const handlePhotoSelect = (e) => {
+    const files = Array.from(e.target.files);
+    setPhotos(files);
+
+    const previews = files.map(file => URL.createObjectURL(file));
+    setPhotoPreviews(previews);
+  };
 
   const handleStartEditJournal = async (journal) => {
     if (editingJournal?.id === journal.id) {
@@ -438,7 +447,7 @@ function App() {
     setAttendance(att);
   };
 
-  // 🔥 SUBMIT JURNAL DENGAN PROCESS FOTO BASE64 ANTI-GAGAL
+  // SUBMIT JURNAL + CONVERT ALL FOTO KE BASE64
   const handleSubmitJurnal = async () => {
     if (isDemo) return Toast.fire({ icon: 'info', title: 'Mode Demo: Data tidak tersimpan.' });
     if (!material.trim()) return Toast.fire({ icon: 'warning', title: 'Isi materi pembelajaran dulu!' });
@@ -446,9 +455,8 @@ function App() {
     setLoading(true);
     let photoBase64List = [];
 
-    // Compress & convert semua foto yang di-upload ke Base64
-    if (photos.length > 0) {
-      for (const file of photos) {
+    if (photoFiles.length > 0) {
+      for (const file of photoFiles) {
         const base64Img = await compressImageToBase64(file);
         photoBase64List.push(base64Img);
       }
@@ -461,7 +469,7 @@ function App() {
         class_name: selectedClass, 
         subject: selectedSubject, 
         material, 
-        photos: photoBase64List, // String Base64 Array tersimpan 100% aman
+        photos: photoBase64List,
         created_at: customEntryDate 
       }
     ]).select().single();
@@ -480,13 +488,14 @@ function App() {
       Swal.fire({
         icon: 'success',
         title: 'Tersimpan!',
-        text: 'Jurnal Bel Ajar & Foto Berhasil Disimpan.',
+        text: 'Jurnal & Foto Berhasil Disimpan!',
         timer: 1800,
         showConfirmButton: false
       });
 
       setMaterial('');
       setPhotos([]);
+      setPhotoPreviews([]);
       setGrades({});
       initAttendance(students);
     } else {
@@ -495,7 +504,6 @@ function App() {
     setLoading(false);
   };
 
-  // MATERI TERTINGGAL BAGI SISWA ABSEN
   const handleShowAbsenceDetails = async (student) => {
     setFetchingStudents(true);
     const { data: absList } = await supabase
@@ -691,7 +699,7 @@ function App() {
     );
   }
 
-  // FILTER SISWA BERDASARKAN QUERY SEARCH + CHIP SORTASI PRESENSI
+  // LOGIKA SORTASI SISWA DENGAN CHIP FILTER
   const filteredAllStudents = allStudents.filter(s => {
     const matchesSearch = s.name.toLowerCase().includes(searchStudentQuery.toLowerCase()) ||
                           s.class_name.toLowerCase().includes(searchStudentQuery.toLowerCase());
@@ -792,11 +800,20 @@ function App() {
                 <label className="text-xs font-bold text-slate-500 block mb-1">Foto Dokumentasi (Galeri / Kamera)</label>
                 <input 
                   type="file" multiple accept="image/*"
-                  onChange={e => setPhotos(Array.from(e.target.files))}
+                  onChange={handlePhotoSelect}
                   className="w-full text-xs text-slate-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-blue-50 file:text-blue-600"
                 />
-                {photos.length > 0 && (
-                  <p className="text-[10px] text-emerald-600 font-bold mt-1">✓ {photos.length} file foto dipilih</p>
+                
+                {/* PREVIEW LOKAL FOTO TERPILIH */}
+                {photoPreviews.length > 0 && (
+                  <div className="mt-2 space-y-1">
+                    <p className="text-[10px] text-emerald-600 font-bold">✓ {photoPreviews.length} foto terpilih untuk di-upload:</p>
+                    <div className="flex gap-2 overflow-x-auto pb-1">
+                      {photoPreviews.map((url, i) => (
+                        <img key={i} src={url} alt="Preview Upload" className="w-14 h-14 object-cover rounded-xl border border-blue-300" />
+                      ))}
+                    </div>
+                  </div>
                 )}
               </div>
             </div>
@@ -992,7 +1009,7 @@ function App() {
                       <p className="text-xs text-slate-700 font-semibold">{j.material}</p>
                     )}
 
-                    {/* 🔥 FOTO DOKUMENTASI DENGAN PREVIEW REAL BASE64 */}
+                    {/* FOTO DOKUMENTASI TERANAM DENGAN MANIS */}
                     {Array.isArray(photoList) && photoList.length > 0 && (
                       <div className="pt-2 border-t border-slate-100">
                         <p className="text-[10px] font-bold text-slate-400 mb-1.5 flex items-center gap-1">
@@ -1019,7 +1036,7 @@ function App() {
           </div>
         )}
 
-        {/* TAB 3: MANAGEMENT SISWA + SORTASI PRESENSI H/S/I/A */}
+        {/* TAB 3: MANAGEMENT SISWA + CHIP SORTASI PRESENSI */}
         {activeTab === 'siswa' && (
           <div className="space-y-4">
             <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm space-y-3">
@@ -1069,7 +1086,7 @@ function App() {
                 />
               </div>
 
-              {/* 🔥 CHIP SORTASI PRESENSI MANDIRI (SEMUA / SAKIT / IZIN / ALFA) */}
+              {/* 🔥 TOMBOL CHIP SORTASI SISWA ABSEN/PRESENSI */}
               <div className="flex items-center gap-1.5 pt-1 overflow-x-auto">
                 <span className="text-[10px] font-bold text-slate-400 mr-1 flex items-center gap-0.5">
                   <Filter className="w-3 h-3" /> Filter:
@@ -1095,7 +1112,7 @@ function App() {
               </div>
             </div>
 
-            {/* LIST SISWA */}
+            {/* LIST SISWA TERFILTER */}
             <div className="space-y-2">
               <p className="text-xs text-slate-500 font-bold px-1">Total Siswa: {filteredAllStudents.length}</p>
               {filteredAllStudents.length === 0 ? (
