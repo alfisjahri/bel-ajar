@@ -5,20 +5,27 @@ import {
   BookOpen, FileText, LogOut, Check, UserCheck, 
   Search, Edit3, Image as ImageIcon, Users, RefreshCw,
   Plus, Trash, Edit, Save, X, Download, Eye, Printer, 
-  ChevronDown, ChevronUp, Settings, Calendar, ShieldAlert, CheckCircle, AlertTriangle
+  ChevronDown, ChevronUp, Settings, Calendar, ShieldAlert, Filter, AlertCircle
 } from 'lucide-react';
+
+/* Helper SweetAlert2 Bawaan CDN */
+const Swal = window.Swal || {
+  fire: (opts) => alert(opts.title || opts.text),
+  mixin: () => ({ fire: (opts) => alert(opts.title || opts.text) })
+};
+
+const Toast = Swal.mixin({
+  toast: true,
+  position: 'top',
+  showConfirmButton: false,
+  timer: 2000,
+  timerProgressBar: true
+});
 
 function App() {
   const [session, setSession] = useState(null);
   const [isDemo, setIsDemo] = useState(false);
   const [activeTab, setActiveTab] = useState('input');
-  
-  // Custom Alert Toast State
-  const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
-  const showToast = (message, type = 'success') => {
-    setToast({ show: true, message, type });
-    setTimeout(() => setToast({ show: false, message: '', type: 'success' }), 3500);
-  };
 
   // Auth & Lockout State (Max 3x Coba)
   const [email, setEmail] = useState('');
@@ -53,21 +60,24 @@ function App() {
   const [startDate, setStartDateFilter] = useState(new Date().toISOString().split('T')[0]);
   const [endDate, setEndDateFilter] = useState(new Date().toISOString().split('T')[0]);
 
-  // Modal Print Preview State
+  // Modal State
   const [showPreviewModal, setShowPreviewModal] = useState(false);
   const [previewData, setPreviewData] = useState(null);
+  const [selectedImageModal, setSelectedImageModal] = useState(null);
 
-  // Management Siswa
+  // Management Siswa & Filter Presensi Siswa
   const [allStudents, setAllStudents] = useState([]);
   const [searchStudentQuery, setSearchStudentQuery] = useState('');
+  const [attendanceFilter, setAttendanceFilter] = useState('ALL'); // 'ALL', 'Sakit', 'Izin', 'Alfa'
   const [isAddingStudent, setIsAddingStudent] = useState(false);
   const [newStudent, setNewStudent] = useState({ name: '', class_name: '7' });
   const [editingStudent, setEditingStudent] = useState(null);
+  const [studentAbsenceDetails, setStudentAbsenceDetails] = useState(null); // Detail materi tertinggal
 
-  // History Jurnal (Tab Review) & Full Edit State
+  // History Jurnal (Tab Review)
   const [journalsHistory, setJournalsHistory] = useState([]);
   const [fetchingHistory, setFetchingHistory] = useState(false);
-  const [editingJournal, setEditingJournal] = useState(null); // { id, material, class_name, attendance: {}, grades: {} }
+  const [editingJournal, setEditingJournal] = useState(null);
   const [editStudentsList, setEditStudentsList] = useState([]);
   const [savingEdit, setSavingEdit] = useState(false);
 
@@ -102,7 +112,7 @@ function App() {
     return () => subscription.unsubscribe();
   }, []);
 
-  // Fetch Riwayat Jurnal untuk Tab Review
+  // Fetch History Jurnal
   const fetchJournalsHistory = async () => {
     if (isDemo) return;
     setFetchingHistory(true);
@@ -122,7 +132,7 @@ function App() {
     if (activeTab === 'siswa') fetchAllStudents();
   }, [activeTab]);
 
-  // AKSI EDIT FULL JURNAL (MEMUAT DATA SISWA, PRESENSI & NILAI LAMA)
+  // EDIT JURNAL
   const handleStartEditJournal = async (journal) => {
     if (editingJournal?.id === journal.id) {
       setEditingJournal(null);
@@ -130,20 +140,17 @@ function App() {
     }
 
     setFetchingHistory(true);
-    // 1. Fetch data siswa di kelas tersebut
     const { data: studentList } = await supabase
       .from('students')
       .select('*')
       .eq('class_name', journal.class_name)
       .order('name', { ascending: true });
 
-    // 2. Fetch data presensi pada jurnal ini
     const { data: attData } = await supabase
       .from('attendance')
       .select('*')
       .eq('journal_id', journal.id);
 
-    // 3. Fetch data nilai pada jurnal ini
     const { data: gradeData } = await supabase
       .from('grades')
       .select('*')
@@ -174,24 +181,21 @@ function App() {
     setFetchingHistory(false);
   };
 
-  // SIMPAN HASIL REVISI JURNAL (MATERI, PRESENSI & NILAI SUSULAN)
   const handleSaveFullJournal = async () => {
     if (!editingJournal) return;
     setSavingEdit(true);
 
-    // 1. Update Materi Jurnal
     const { error: jErr } = await supabase
       .from('journals')
       .update({ material: editingJournal.material })
       .eq('id', editingJournal.id);
 
     if (jErr) {
-      showToast('Gagal update materi: ' + jErr.message, 'error');
+      Toast.fire({ icon: 'error', title: 'Gagal update materi: ' + jErr.message });
       setSavingEdit(false);
       return;
     }
 
-    // 2. Upsert Presensi
     const attRecords = editStudentsList.map(s => ({
       journal_id: editingJournal.id,
       student_id: s.id,
@@ -201,7 +205,6 @@ function App() {
 
     await supabase.from('attendance').upsert(attRecords, { onConflict: 'journal_id,student_id' });
 
-    // 3. Upsert / Delete Nilai Susulan
     for (const s of editStudentsList) {
       const scoreVal = editingJournal.grades[s.id];
       if (scoreVal !== undefined && scoreVal !== null && scoreVal !== '') {
@@ -212,32 +215,41 @@ function App() {
           date: editingJournal.created_at
         }], { onConflict: 'journal_id,student_id' });
       } else {
-        // Jika nilai dikosongkan, hapus rekaman nilai
         await supabase.from('grades').delete().match({ journal_id: editingJournal.id, student_id: s.id });
       }
     }
 
-    showToast('✅ Jurnal, Presensi & Nilai Berhasil Diperbarui!');
+    Toast.fire({ icon: 'success', title: 'Jurnal & Presensi Diperbarui!' });
     setEditingJournal(null);
     setSavingEdit(false);
     fetchJournalsHistory();
   };
 
-  // HAPUS JURNAL
-  const handleDeleteJournal = async (journalId) => {
-    if (!window.confirm('Yakin ingin menghapus jurnal ini? Data presensi terkait juga akan terhapus.')) return;
+  // HAPUS JURNAL WITH SWEETALERT2
+  const handleDeleteJournal = (journalId) => {
+    Swal.fire({
+      title: 'Hapus Jurnal Ini?',
+      text: 'Data presensi dan nilai terkait akan ikut terhapus permanen.',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#ef4444',
+      cancelButtonColor: '#64748b',
+      confirmButtonText: 'Ya, Hapus!',
+      cancelButtonText: 'Batal'
+    }).then(async (result) => {
+      if (result.isConfirmed) {
+        await supabase.from('attendance').delete().eq('journal_id', journalId);
+        await supabase.from('grades').delete().eq('journal_id', journalId);
+        const { error } = await supabase.from('journals').delete().eq('id', journalId);
 
-    await supabase.from('attendance').delete().eq('journal_id', journalId);
-    await supabase.from('grades').delete().eq('journal_id', journalId);
-    
-    const { error } = await supabase.from('journals').delete().eq('id', journalId);
-
-    if (!error) {
-      showToast('Jurnal berhasil dihapus!');
-      fetchJournalsHistory();
-    } else {
-      showToast('Gagal menghapus jurnal: ' + error.message, 'error');
-    }
+        if (!error) {
+          Toast.fire({ icon: 'success', title: 'Jurnal berhasil dihapus' });
+          fetchJournalsHistory();
+        } else {
+          Toast.fire({ icon: 'error', title: 'Gagal menghapus jurnal' });
+        }
+      }
+    });
   };
 
   const fetchProfile = async (userId) => {
@@ -255,7 +267,7 @@ function App() {
   };
 
   const handleSaveProfile = async () => {
-    if (!session) return showToast('Kamu harus login terlebih dahulu!', 'error');
+    if (!session) return Toast.fire({ icon: 'error', title: 'Harus login dulu!' });
     setLoading(true);
 
     const updates = {
@@ -274,9 +286,9 @@ function App() {
     setLoading(false);
 
     if (!error) {
-      showToast('Profil & NIP tersimpan permanen!');
+      Toast.fire({ icon: 'success', title: 'Profil & NIP Tersimpan!' });
     } else {
-      showToast('Gagal menyimpan profil: ' + error.message, 'error');
+      Toast.fire({ icon: 'error', title: 'Gagal simpan: ' + error.message });
     }
   };
 
@@ -289,7 +301,7 @@ function App() {
       const base64String = reader.result;
       setProfile(prev => ({ ...prev, signature_url: base64String }));
       localStorage.setItem('teacher_sig', base64String);
-      showToast('Gambar TTD dimuat! Klik Simpan Profil di bawah.');
+      Toast.fire({ icon: 'success', title: 'Gambar TTD berhasil dimuat!' });
     };
     reader.readAsDataURL(file);
   };
@@ -342,13 +354,13 @@ function App() {
     ]);
 
     if (!error) {
-      showToast('Siswa berhasil ditambahkan!');
+      Toast.fire({ icon: 'success', title: 'Siswa berhasil ditambahkan!' });
       setNewStudent({ name: '', class_name: '7' });
       setIsAddingStudent(false);
       fetchAllStudents();
       fetchStudentsByClass(selectedClass);
     } else {
-      showToast('Gagal menambah siswa: ' + error.message, 'error');
+      Toast.fire({ icon: 'error', title: 'Gagal tambah siswa' });
     }
   };
 
@@ -359,26 +371,34 @@ function App() {
     }).eq('id', id);
 
     if (!error) {
-      showToast('Data siswa diperbarui!');
+      Toast.fire({ icon: 'success', title: 'Siswa diperbarui!' });
       setEditingStudent(null);
       fetchAllStudents();
       fetchStudentsByClass(selectedClass);
     } else {
-      showToast('Gagal memperbarui siswa', 'error');
+      Toast.fire({ icon: 'error', title: 'Gagal update siswa' });
     }
   };
 
-  const handleDeleteStudent = async (id, name) => {
-    if (!window.confirm(`Yakin ingin menghapus siswa ${name}?`)) return;
-
-    const { error } = await supabase.from('students').delete().eq('id', id);
-    if (!error) {
-      showToast('Siswa terhapus!');
-      fetchAllStudents();
-      fetchStudentsByClass(selectedClass);
-    } else {
-      showToast('Gagal menghapus siswa', 'error');
-    }
+  const handleDeleteStudent = (id, name) => {
+    Swal.fire({
+      title: `Hapus ${name}?`,
+      text: 'Data siswa ini akan dihapus dari sistem.',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#ef4444',
+      cancelButtonColor: '#64748b',
+      confirmButtonText: 'Ya, Hapus'
+    }).then(async (res) => {
+      if (result.isConfirmed) {
+        const { error } = await supabase.from('students').delete().eq('id', id);
+        if (!error) {
+          Toast.fire({ icon: 'success', title: 'Siswa terhapus' });
+          fetchAllStudents();
+          fetchStudentsByClass(selectedClass);
+        }
+      }
+    });
   };
 
   const initAttendance = (studentList) => {
@@ -388,8 +408,8 @@ function App() {
   };
 
   const handleSubmitJurnal = async () => {
-    if (isDemo) return showToast('Mode Demo: Data tidak tersimpan.', 'error');
-    if (!material.trim()) return showToast('Isi materi pembelajaran terlebih dahulu!', 'error');
+    if (isDemo) return Toast.fire({ icon: 'info', title: 'Mode Demo: Data tidak tersimpan.' });
+    if (!material.trim()) return Toast.fire({ icon: 'warning', title: 'Isi materi pembelajaran dulu!' });
 
     setLoading(true);
     let photoUrls = [];
@@ -420,15 +440,56 @@ function App() {
       await supabase.from('attendance').insert(attRecords);
       if (gradeRecords.length > 0) await supabase.from('grades').insert(gradeRecords);
 
-      showToast('✅ Jurnal Bel Ajar Berhasil Disimpan!');
+      Swal.fire({
+        icon: 'success',
+        title: 'Tersimpan!',
+        text: 'Jurnal Bel Ajar & Presensi Berhasil Disimpan.',
+        timer: 1800,
+        showConfirmButton: false
+      });
+
       setMaterial('');
       setPhotos([]);
       setGrades({});
       initAttendance(students);
     } else {
-      showToast('Gagal menyimpan jurnal: ' + error?.message, 'error');
+      Toast.fire({ icon: 'error', title: 'Gagal simpan: ' + error?.message });
     }
     setLoading(false);
+  };
+
+  // NAMPILIN DETAIL MATERI TERTINGGAL BAGI SISWA ABSEN
+  const handleShowAbsenceDetails = async (student) => {
+    setFetchingStudents(true);
+    const { data: absList } = await supabase
+      .from('attendance')
+      .select('journal_id, status, date')
+      .eq('student_id', student.id)
+      .neq('status', 'Hadir')
+      .order('date', { ascending: false });
+
+    if (!absList || absList.length === 0) {
+      Toast.fire({ icon: 'info', title: `${student.name} tidak memiliki riwayat ketidakhadiran.` });
+      setFetchingStudents(false);
+      return;
+    }
+
+    const details = [];
+    for (const item of absList) {
+      const { data: jData } = await supabase.from('journals').select('*').eq('id', item.journal_id).maybeSingle();
+      if (jData) {
+        details.push({
+          date: item.date,
+          status: item.status,
+          subject: jData.subject,
+          material: jData.material,
+          photos: jData.photos || []
+        });
+      }
+    }
+
+    setStudentAbsenceDetails({ student, details });
+    setFetchingStudents(false);
   };
 
   const handleExportIndividualPDF = async (student) => {
@@ -493,7 +554,7 @@ function App() {
       const now = new Date().getTime();
       if (now < lockTime) {
         const remainingHours = Math.ceil((lockTime - now) / (1000 * 60 * 60));
-        return showToast(`Akses diblokir! Terlalu banyak percobaan. Coba lagi dalam ${remainingHours} jam.`, 'error');
+        return Toast.fire({ icon: 'error', title: `Akses diblokir! Coba lagi ${remainingHours} jam.` });
       } else {
         localStorage.removeItem('lockout_until');
         localStorage.setItem('login_attempts', '0');
@@ -513,14 +574,18 @@ function App() {
         const lockoutTime = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
         localStorage.setItem('lockout_until', lockoutTime);
         setLockoutUntil(lockoutTime);
-        showToast('❌ Login gagal 3x! Device diblokir selama 24 jam.', 'error');
+        Swal.fire({
+          icon: 'error',
+          title: 'Akses Diblokir 24 Jam',
+          text: 'Login gagal 3 kali berturut-turut untuk keamanan.'
+        });
       } else {
-        showToast(`Login Gagal! Sisa percobaan: ${3 - newAttempts}x`, 'error');
+        Toast.fire({ icon: 'error', title: `Gagal Login! Sisa ${3 - newAttempts}x` });
       }
     } else {
       localStorage.removeItem('login_attempts');
       setLoginAttempts(0);
-      showToast('Berhasil Login!');
+      Toast.fire({ icon: 'success', title: 'Berhasil Login!' });
     }
   };
 
@@ -584,24 +649,16 @@ function App() {
     );
   }
 
-  const filteredAllStudents = allStudents.filter(s => 
-    s.name.toLowerCase().includes(searchStudentQuery.toLowerCase()) ||
-    s.class_name.toLowerCase().includes(searchStudentQuery.toLowerCase())
-  );
+  // FILTER SISWA BERDASARKAN QUERY & STATUS KEHADIRAN
+  const filteredAllStudents = allStudents.filter(s => {
+    const matchesSearch = s.name.toLowerCase().includes(searchStudentQuery.toLowerCase()) ||
+                          s.class_name.toLowerCase().includes(searchStudentQuery.toLowerCase());
+    return matchesSearch;
+  });
 
   return (
     <div className="min-h-screen bg-slate-100 pb-24 max-w-md mx-auto relative shadow-2xl border-x border-slate-200 font-sans">
       
-      {/* Custom Toast Alert */}
-      {toast.show && (
-        <div className={`fixed top-4 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 rounded-2xl shadow-xl border flex items-center space-x-2 text-xs font-bold transition-all animate-bounce ${
-          toast.type === 'error' ? 'bg-red-500 text-white border-red-600' : 'bg-slate-900 text-white border-slate-800'
-        }`}>
-          {toast.type === 'error' ? <AlertTriangle className="w-4 h-4 text-amber-300" /> : <CheckCircle className="w-4 h-4 text-emerald-400" />}
-          <span>{toast.message}</span>
-        </div>
-      )}
-
       {/* Top Mobile Bar */}
       <div className="no-print bg-blue-600 text-white p-4 sticky top-0 z-30 shadow-md rounded-b-2xl flex justify-between items-center">
         <div className="flex items-center space-x-3">
@@ -762,7 +819,7 @@ function App() {
           </div>
         )}
 
-        {/* 🔥 TAB 2: REVIEW JURNAL (LENGKAP FITUR EDIT TOTAL: MATERI, PRESENSI & NILAI SUSULAN) */}
+        {/* TAB 2: REVIEW JURNAL (LENGKAP FOTO PREVIEW & LIGHTBOX) */}
         {activeTab === 'edit' && (
           <div className="space-y-4">
             <div className="flex justify-between items-center">
@@ -784,11 +841,10 @@ function App() {
                     <div className="flex items-center space-x-2">
                       <span className="text-[10px] text-slate-400 font-semibold">{new Date(j.created_at).toLocaleDateString('id-ID')}</span>
                       
-                      {/* 🔥 TOMBOL TOGGLE EDIT FULL JURNAL */}
                       <button 
                         onClick={() => handleStartEditJournal(j)}
                         className={`p-1 rounded-lg ${editingJournal?.id === j.id ? 'bg-blue-100 text-blue-700 font-bold' : 'text-slate-500 hover:text-blue-600'}`}
-                        title="Edit Total Jurnal"
+                        title="Edit Jurnal"
                       >
                         <Edit className="w-3.5 h-3.5" />
                       </button>
@@ -803,7 +859,6 @@ function App() {
                     </div>
                   </div>
 
-                  {/* MODE EDIT TOTAL JURNAL */}
                   {editingJournal?.id === j.id ? (
                     <div className="space-y-3 pt-2 bg-blue-50/50 p-3 rounded-xl border border-blue-200">
                       <div>
@@ -815,7 +870,6 @@ function App() {
                         />
                       </div>
 
-                      {/* EDIT PRESENSI & NILAI SUSULAN SISWA */}
                       <div>
                         <label className="text-[10px] font-bold text-slate-600 block mb-1.5">Edit Presensi & Nilai Susulan Siswa</label>
                         <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
@@ -824,7 +878,6 @@ function App() {
                               <span className="font-bold text-[11px] text-slate-800 truncate flex-1">{idx + 1}. {student.name}</span>
                               
                               <div className="flex items-center space-x-2">
-                                {/* Radio H/S/I/A */}
                                 <div className="flex items-center space-x-1.5 bg-slate-50 p-1 rounded-lg border">
                                   {[
                                     { code: 'Hadir', label: 'H', color: 'text-emerald-600' },
@@ -849,7 +902,6 @@ function App() {
                                   ))}
                                 </div>
 
-                                {/* Nilai Susulan */}
                                 <input 
                                   type="number" 
                                   placeholder="Nilai" 
@@ -885,11 +937,21 @@ function App() {
                     <p className="text-xs text-slate-700 font-semibold">{j.material}</p>
                   )}
 
+                  {/* 🔥 TAMPILAN FOTO DOKUMENTASI DENGAN TOUCH LIGHTBOX PREVIEW */}
                   {j.photos && j.photos.length > 0 && (
-                    <div className="flex gap-2 pt-1 overflow-x-auto">
-                      {j.photos.map((url, i) => (
-                        <img key={i} src={url} alt="Dokumentasi" className="w-14 h-14 object-cover rounded-xl border" />
-                      ))}
+                    <div className="pt-2">
+                      <p className="text-[10px] font-bold text-slate-400 mb-1">Foto Dokumentasi:</p>
+                      <div className="flex gap-2 overflow-x-auto pb-1">
+                        {j.photos.map((url, i) => (
+                          <img 
+                            key={i} 
+                            src={url} 
+                            alt="Dokumentasi" 
+                            onClick={() => setSelectedImageModal(url)}
+                            className="w-16 h-16 object-cover rounded-xl border border-slate-200 cursor-pointer hover:opacity-80 active:scale-95 transition-all shadow-sm flex-shrink-0" 
+                          />
+                        ))}
+                      </div>
                     </div>
                   )}
                 </div>
@@ -898,7 +960,7 @@ function App() {
           </div>
         )}
 
-        {/* TAB 3: MANAGEMENT SISWA */}
+        {/* 🔥 TAB 3: MANAGEMENT SISWA + SORT KETIDAKHADIRAN & MATERI TERTINGGAL */}
         {activeTab === 'siswa' && (
           <div className="space-y-4">
             <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm space-y-3">
@@ -949,6 +1011,7 @@ function App() {
               </div>
             </div>
 
+            {/* LIST SISWA */}
             <div className="space-y-2">
               <p className="text-xs text-slate-500 font-bold px-1">Total Siswa: {filteredAllStudents.length}</p>
               {filteredAllStudents.length === 0 ? (
@@ -983,6 +1046,15 @@ function App() {
                           <span className="text-[10px] font-bold bg-blue-50 text-blue-600 px-2 py-0.5 rounded-md">Kelas {student.class_name}</span>
                         </div>
                         <div className="flex items-center space-x-1">
+                          {/* 🔥 TOMBOL LIHAT MATERI TERTINGGAL BILA SISWA PERNAH ABSEN */}
+                          <button 
+                            onClick={() => handleShowAbsenceDetails(student)}
+                            title="Materi Tertinggal"
+                            className="p-1.5 text-amber-600 hover:bg-amber-50 rounded-lg"
+                          >
+                            <AlertCircle className="w-4 h-4" />
+                          </button>
+
                           <button 
                             onClick={() => handleExportIndividualPDF(student)} 
                             title="Preview PDF Siswa"
@@ -990,9 +1062,11 @@ function App() {
                           >
                             <Eye className="w-4 h-4" />
                           </button>
+
                           <button onClick={() => setEditingStudent(student)} className="p-1.5 text-slate-500 hover:text-blue-600">
                             <Edit className="w-4 h-4" />
                           </button>
+
                           <button onClick={() => handleDeleteStudent(student.id, student.name)} className="p-1.5 text-slate-400 hover:text-red-600">
                             <Trash className="w-4 h-4" />
                           </button>
@@ -1175,6 +1249,59 @@ function App() {
         </button>
       </div>
 
+      {/* 🔥 MODAL LIGHTBOX FOTO PREVIEW */}
+      {selectedImageModal && (
+        <div className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4">
+          <button 
+            onClick={() => setSelectedImageModal(null)}
+            className="absolute top-4 right-4 bg-white/20 text-white p-2 rounded-full hover:bg-white/40"
+          >
+            <X className="w-6 h-6" />
+          </button>
+          <img src={selectedImageModal} alt="Preview Dokumentasi Full" className="max-w-full max-h-[85vh] object-contain rounded-2xl shadow-2xl" />
+        </div>
+      )}
+
+      {/* 🔥 MODAL DETAIL MATERI TERTINGGAL (UNTUK SISWA ABSEN) */}
+      {studentAbsenceDetails && (
+        <div className="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl p-5 w-full max-w-sm space-y-3 shadow-2xl">
+            <div className="flex justify-between items-center border-b pb-2">
+              <div>
+                <h3 className="font-extrabold text-xs text-slate-800">{studentAbsenceDetails.student.name}</h3>
+                <p className="text-[10px] text-amber-600 font-bold">Riwayat Materi Ketertinggalan Belajar</p>
+              </div>
+              <button onClick={() => setStudentAbsenceDetails(null)} className="text-slate-400 p-1"><X className="w-5 h-5" /></button>
+            </div>
+
+            <div className="space-y-3 max-h-80 overflow-y-auto pr-1">
+              {studentAbsenceDetails.details.map((d, idx) => (
+                <div key={idx} className="p-3 bg-amber-50/60 border border-amber-200 rounded-2xl space-y-1.5">
+                  <div className="flex justify-between items-center">
+                    <span className="text-[10px] font-bold bg-amber-100 text-amber-800 px-2 py-0.5 rounded-md">{d.status}</span>
+                    <span className="text-[10px] text-slate-500 font-semibold">{new Date(d.date).toLocaleDateString('id-ID')}</span>
+                  </div>
+                  <p className="text-xs font-bold text-slate-800">{d.subject}</p>
+                  <p className="text-[11px] text-slate-700 font-medium">{d.material}</p>
+                  
+                  {d.photos && d.photos.length > 0 && (
+                    <div className="flex gap-1.5 pt-1 overflow-x-auto">
+                      {d.photos.map((p, i) => (
+                        <img key={i} src={p} onClick={() => setSelectedImageModal(p)} alt="Foto Materi" className="w-12 h-12 object-cover rounded-lg border cursor-pointer" />
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            <button onClick={() => setStudentAbsenceDetails(null)} className="w-full bg-slate-800 text-white font-bold text-xs py-2.5 rounded-xl">
+              Tutup
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* MODAL PREVIEW DOKUMEN LAPORAN & CETAK SAVE AS PDF */}
       {showPreviewModal && previewData && (
         <div className="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-sm flex flex-col justify-between p-2 overflow-y-auto">
@@ -1197,8 +1324,6 @@ function App() {
           </div>
 
           <div className="print-document bg-white p-6 rounded-xl text-slate-900 font-serif shadow-2xl mx-auto w-full max-w-xl text-[9.5pt] leading-tight">
-            
-            {/* KOP SURAT */}
             <div className="flex items-center justify-between gap-3 mb-1">
               <img 
                 src="/logo-kubar.png" 
@@ -1243,7 +1368,6 @@ function App() {
               </div>
             )}
 
-            {/* TABEL DATA SISWA */}
             <table className="w-full border-collapse border border-slate-900 text-[8.5pt] font-sans">
               <thead>
                 <tr className="bg-slate-200 text-slate-900 font-bold text-center">
@@ -1271,7 +1395,6 @@ function App() {
               </tbody>
             </table>
 
-            {/* AREA TTD GURU */}
             <div className="mt-5 flex justify-end font-sans">
               <div className="w-56 text-left text-[9pt]">
                 <p>Damai, {new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
