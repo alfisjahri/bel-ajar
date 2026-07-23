@@ -31,7 +31,7 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [fetchingStudents, setFetchingStudents] = useState(false);
 
-  // Management Siswa State (CRUD)
+  // Management Siswa State (CRUD & Search)
   const [allStudents, setAllStudents] = useState([]);
   const [searchStudentQuery, setSearchStudentQuery] = useState('');
   const [isAddingStudent, setIsAddingStudent] = useState(false);
@@ -41,13 +41,13 @@ export default function App() {
   // History Jurnal
   const [journalsHistory, setJournalsHistory] = useState([]);
 
-  // 1. MAPPING MAPEL OTOMATIS BERDASARKAN KELAS
+  // 🔥 FIX 1: LOGIKA MAPEL KETAT BERDASARKAN KELAS
   useEffect(() => {
     if (selectedClass === '7') {
       setSelectedSubject('Matematika');
     } else if (selectedClass === '9A' || selectedClass === '9B') {
       setSelectedSubject('Koding');
-    } else {
+    } else if (selectedClass === '8A' || selectedClass === '8B') {
       if (selectedSubject !== 'Matematika' && selectedSubject !== 'Koding') {
         setSelectedSubject('Matematika');
       }
@@ -106,7 +106,7 @@ export default function App() {
     setFetchingStudents(false);
   };
 
-  // Fetch Semua Siswa untuk Tab "Siswa"
+  // Fetch Semua Siswa
   const fetchAllStudents = async () => {
     if (isDemo) return;
     const { data } = await supabase.from('students').select('*').order('name', { ascending: true });
@@ -122,9 +122,9 @@ export default function App() {
     e.preventDefault();
     if (!newStudent.name.trim()) return;
 
-    const { data, error } = await supabase.from('students').insert([
+    const { error } = await supabase.from('students').insert([
       { name: newStudent.name.toUpperCase(), class_name: newStudent.class_name }
-    ]).select();
+    ]);
 
     if (!error) {
       alert('Siswa berhasil ditambahkan!');
@@ -271,7 +271,7 @@ export default function App() {
   return (
     <div className="min-h-screen bg-slate-100 pb-24 max-w-md mx-auto relative shadow-2xl border-x border-slate-200 font-sans">
       
-      {/* Top Mobile Bar */}
+      {/* Header */}
       <div className="bg-blue-600 text-white p-4 sticky top-0 z-30 shadow-md rounded-b-2xl flex justify-between items-center">
         <div className="flex items-center space-x-3">
           <img 
@@ -318,17 +318,19 @@ export default function App() {
                   </select>
                 </div>
 
+                {/* 🔥 FIX: DROPDOWN MAPEL HANYA MENAMPILKAN OPTION YANG SESUAI */}
                 <div>
                   <label className="text-xs font-bold text-slate-500 block mb-1">Mata Pelajaran</label>
                   <select 
-                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 disabled:opacity-75"
+                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700"
                     value={selectedSubject} 
                     onChange={e => setSelectedSubject(e.target.value)}
-                    disabled={selectedClass === '7' || selectedClass === '9A' || selectedClass === '9B'}
                   >
+                    {/* Kelas 7 & 8: Tampilkan Matematika */}
                     {(selectedClass === '7' || selectedClass === '8A' || selectedClass === '8B') && (
                       <option value="Matematika">Matematika</option>
                     )}
+                    {/* Kelas 8 & 9: Tampilkan Koding */}
                     {(selectedClass === '8A' || selectedClass === '8B' || selectedClass === '9A' || selectedClass === '9B') && (
                       <option value="Koding">Koding</option>
                     )}
@@ -434,7 +436,7 @@ export default function App() {
           </div>
         )}
 
-        {/* TAB 3: MANAGEMENT SISWA */}
+        {/* 🔥 FIX 2: MANAGEMENT SISWA DENGAN CARI, EDIT, HAPUS, DAN TAMBAH */}
         {activeTab === 'siswa' && (
           <div className="space-y-4">
             <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm space-y-3">
@@ -480,56 +482,60 @@ export default function App() {
               <div className="relative">
                 <Search className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
                 <input 
-                  type="text" placeholder="Cari nama atau kelas..." 
+                  type="text" placeholder="Ketik nama atau kelas siswa..." 
                   className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold"
                   value={searchStudentQuery} onChange={e => setSearchStudentQuery(e.target.value)}
                 />
               </div>
             </div>
 
-            {/* List Siswa */}
+            {/* List Semua Siswa */}
             <div className="space-y-2">
               <p className="text-xs text-slate-500 font-bold px-1">Total Siswa: {filteredAllStudents.length}</p>
-              {filteredAllStudents.map(student => (
-                <div key={student.id} className="bg-white p-3 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between gap-2">
-                  {editingStudent?.id === student.id ? (
-                    <div className="flex-1 flex gap-2">
-                      <input 
-                        type="text" 
-                        className="p-1.5 border rounded-lg text-xs font-semibold flex-1"
-                        value={editingStudent.name} onChange={e => setEditingStudent({...editingStudent, name: e.target.value})}
-                      />
-                      <select 
-                        className="p-1.5 border rounded-lg text-xs font-bold"
-                        value={editingStudent.class_name} onChange={e => setEditingStudent({...editingStudent, class_name: e.target.value})}
-                      >
-                        <option value="7">7</option>
-                        <option value="8A">8A</option>
-                        <option value="8B">8B</option>
-                        <option value="9A">9A</option>
-                        <option value="9B">9B</option>
-                      </select>
-                      <button onClick={() => handleUpdateStudent(student.id)} className="text-emerald-600 p-1"><Save className="w-4 h-4" /></button>
-                      <button onClick={() => setEditingStudent(null)} className="text-slate-400 p-1"><X className="w-4 h-4" /></button>
-                    </div>
-                  ) : (
-                    <>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-bold text-xs text-slate-800 truncate">{student.name}</p>
-                        <span className="text-[10px] font-bold bg-blue-50 text-blue-600 px-2 py-0.5 rounded-md">Kelas {student.class_name}</span>
+              {filteredAllStudents.length === 0 ? (
+                <p className="text-xs text-center text-slate-400 py-6 bg-white rounded-2xl border">Siswa tidak ditemukan.</p>
+              ) : (
+                filteredAllStudents.map(student => (
+                  <div key={student.id} className="bg-white p-3 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between gap-2">
+                    {editingStudent?.id === student.id ? (
+                      <div className="flex-1 flex gap-2">
+                        <input 
+                          type="text" 
+                          className="p-1.5 border rounded-lg text-xs font-semibold flex-1"
+                          value={editingStudent.name} onChange={e => setEditingStudent({...editingStudent, name: e.target.value})}
+                        />
+                        <select 
+                          className="p-1.5 border rounded-lg text-xs font-bold"
+                          value={editingStudent.class_name} onChange={e => setEditingStudent({...editingStudent, class_name: e.target.value})}
+                        >
+                          <option value="7">7</option>
+                          <option value="8A">8A</option>
+                          <option value="8B">8B</option>
+                          <option value="9A">9A</option>
+                          <option value="9B">9B</option>
+                        </select>
+                        <button onClick={() => handleUpdateStudent(student.id)} className="text-emerald-600 p-1"><Save className="w-4 h-4" /></button>
+                        <button onClick={() => setEditingStudent(null)} className="text-slate-400 p-1"><X className="w-4 h-4" /></button>
                       </div>
-                      <div className="flex items-center space-x-1">
-                        <button onClick={() => setEditingStudent(student)} className="p-1.5 text-slate-500 hover:text-blue-600">
-                          <Edit className="w-4 h-4" />
-                        </button>
-                        <button onClick={() => handleDeleteStudent(student.id, student.name)} className="p-1.5 text-slate-400 hover:text-red-600">
-                          <Trash className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </>
-                  )}
-                </div>
-              ))}
+                    ) : (
+                      <>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-bold text-xs text-slate-800 truncate">{student.name}</p>
+                          <span className="text-[10px] font-bold bg-blue-50 text-blue-600 px-2 py-0.5 rounded-md">Kelas {student.class_name}</span>
+                        </div>
+                        <div className="flex items-center space-x-1">
+                          <button onClick={() => setEditingStudent(student)} className="p-1.5 text-slate-500 hover:text-blue-600">
+                            <Edit className="w-4 h-4" />
+                          </button>
+                          <button onClick={() => handleDeleteStudent(student.id, student.name)} className="p-1.5 text-slate-400 hover:text-red-600">
+                            <Trash className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                ))
+              )}
             </div>
           </div>
         )}
@@ -575,7 +581,7 @@ export default function App() {
 
       </div>
 
-      {/* Floating Footer Navigation */}
+      {/* Navigation Footer */}
       <div className="fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-white/95 backdrop-blur-md border-t border-slate-200 flex justify-around p-2 z-30 rounded-t-2xl shadow-lg">
         <button onClick={() => setActiveTab('input')} className={`p-2 flex flex-col items-center ${activeTab === 'input' ? 'text-blue-600 font-bold scale-105' : 'text-slate-400'}`}>
           <BookOpen className="w-5 h-5" />
