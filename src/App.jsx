@@ -237,16 +237,16 @@ export default function App() {
                 <div>
                   <label className="text-xs font-bold text-slate-500 block mb-1">Kelas</label>
                   <select 
-                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700"
-                    value={selectedClass} 
-                    onChange={e => setSelectedClass(e.target.value)}
-                  >
-                    <option value="7">Kelas 7</option>
-                    <option value="8A">Kelas 8A</option>
-                    <option value="8B">Kelas 8B</option>
-                    <option value="9A">Kelas 9A</option>
-                    <option value="9B">Kelas 9B</option>
-                  </select>
+  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700"
+  value={selectedClass} 
+  onChange={e => setSelectedClass(e.target.value)}
+>
+  <option value="7">Kelas 7</option>
+  <option value="8A">Kelas 8A</option>
+  <option value="8B">Kelas 8B</option>
+  <option value="9A">Kelas 9A</option>
+  <option value="9B">Kelas 9B</option>
+</select>
                 </div>
 
                 <div>
