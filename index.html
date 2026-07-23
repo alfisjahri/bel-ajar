@@ -2,12 +2,22 @@
 <html lang="id">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <title>Bel Ajar - Jurnal Mengajar SMP</title>
-    <!-- Tailwind CSS Script via CDN -->
+
+    <!-- Manifest & Mobile Capabilities -->
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="theme-color" content="#2563eb" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Bel Ajar" />
+    <link rel="apple-touch-icon" href="/logo.png" />
+    <link rel="icon" type="image/png" href="/logo.png" />
+
+    <!-- Tailwind CSS CDN (Guaranteed Build) -->
     <script src="https://cdn.tailwindcss.com"></script>
   </head>
-  <body class="bg-slate-100 text-slate-900">
+  <body class="bg-slate-100 text-slate-900 antialiased selection:bg-blue-500 selection:text-white">
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>
