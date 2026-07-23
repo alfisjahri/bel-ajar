@@ -449,7 +449,7 @@ function App() {
               </div>
             </div>
 
-            {/* 🔥 PRESENSI RADIO BUTTON CARD (H / S / I / A) SANGAT PRESISI LIKE 232448.JPG */}
+            {/* PRESENSI RADIO BUTTON CARD (H / S / I / A) */}
             <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm space-y-3">
               <div className="flex justify-between items-center border-b pb-2">
                 <div className="flex items-center space-x-2">
@@ -827,11 +827,11 @@ function App() {
         </button>
       </div>
 
-      {/* 🔥 MODAL PREVIEW DOKUMEN LAPORAN & CETAK SAVE AS PDF (LOGOS & KOP SURAT 100% PERSIS) */}
+      {/* MODAL PREVIEW DOKUMEN LAPORAN & CETAK SAVE AS PDF */}
       {showPreviewModal && previewData && (
         <div className="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-sm flex flex-col justify-between p-2 overflow-y-auto">
           {/* Action Header Modal */}
-          <div className="no-print bg-white p-3 rounded-2xl flex justify-between items-center shadow-lg mb-2 sticky top-0 z-10">
+          <div className="no-print bg-white p-3 rounded-2xl flex justify-between items-center shadow-lg mb-3 sticky top-0 z-10 max-w-xl mx-auto w-full">
             <button 
               onClick={() => setShowPreviewModal(false)}
               className="bg-slate-100 text-slate-700 px-3 py-1.5 rounded-xl text-xs font-bold flex items-center space-x-1"
@@ -849,11 +849,11 @@ function App() {
             </button>
           </div>
 
-          {/* Area Dokumen Resmi (Kop Surat & Logos 232447.jpg) */}
-          <div className="bg-white p-4 rounded-xl text-slate-900 font-serif shadow-2xl mx-auto w-full max-w-xl text-[9pt] leading-tight">
+          {/* Area Dokumen Resmi (Penuh 100% Kertas Saat Dicetak) */}
+          <div className="print-document bg-white p-6 rounded-xl text-slate-900 font-serif shadow-2xl mx-auto w-full max-w-xl text-[9.5pt] leading-tight">
             
             {/* KOP SURAT RESMI DENGAN 2 LOGO */}
-            <div className="flex items-center justify-between gap-2 mb-1">
+            <div className="flex items-center justify-between gap-3 mb-1">
               {/* Logo Pemkab Kutai Barat (Kiri) */}
               <img 
                 src="/logo-kubar.png" 
@@ -864,13 +864,13 @@ function App() {
 
               {/* Teks Tengah Kop Surat */}
               <div className="text-center flex-1">
-                <h3 className="font-bold text-[10.5pt] uppercase tracking-wide m-0 p-0">PEMERINTAH KABUPATEN KUTAI BARAT</h3>
-                <h3 className="font-bold text-[11.5pt] uppercase tracking-wide m-0 p-0">DINAS PENDIDIKAN DAN KEBUDAYAAN</h3>
-                <h2 className="font-black text-[13.5pt] uppercase tracking-wider m-0 p-0">SMP NEGERI 1 DAMAI</h2>
+                <h3 className="font-bold text-[11pt] uppercase tracking-wide m-0 p-0">PEMERINTAH KABUPATEN KUTAI BARAT</h3>
+                <h3 className="font-bold text-[12pt] uppercase tracking-wide m-0 p-0">DINAS PENDIDIKAN DAN KEBUDAYAAN</h3>
+                <h2 className="font-black text-[14pt] uppercase tracking-wider m-0 p-0">SMP NEGERI 1 DAMAI</h2>
                 <p className="font-bold text-[8.5pt] m-0 p-0 mt-0.5">
                   <u>NSS : 20.1.16.09.08.001</u> &nbsp;&nbsp; <u>NPSN : 30400615</u> &nbsp;&nbsp; <u>NIS : 200070</u>
                 </p>
-                <p className="text-[7.5pt] m-0 p-0 italic">
+                <p className="text-[8pt] m-0 p-0 italic">
                   Jalan Temanggung Gamas RT.1 No.27 Damai Kota - Kode Pos 75777
                 </p>
               </div>
@@ -885,16 +885,16 @@ function App() {
             </div>
 
             {/* Garis Tebal Ganda Kop Surat */}
-            <div className="border-t-[2.5px] border-black border-b-[0.8px] border-b-black h-[2px] my-1.5"></div>
+            <div className="border-t-[2.5px] border-black border-b-[0.8px] border-b-black h-[2px] my-2"></div>
 
             {/* Judul Laporan */}
             <div className="text-center my-3">
-              <h4 className="font-bold text-[10.5pt] uppercase underline">{previewData.title}</h4>
-              {previewData.subtitle && <p className="text-[8.5pt] text-slate-700 font-sans mt-0.5">{previewData.subtitle}</p>}
+              <h4 className="font-bold text-[11pt] uppercase underline">{previewData.title}</h4>
+              {previewData.subtitle && <p className="text-[9pt] text-slate-700 font-sans mt-0.5">{previewData.subtitle}</p>}
             </div>
 
             {/* Tabel Data Siswa */}
-            <table className="w-full border-collapse border border-slate-900 text-[8pt] font-sans">
+            <table className="w-full border-collapse border border-slate-900 text-[8.5pt] font-sans">
               <thead>
                 <tr className="bg-slate-200 text-slate-900 font-bold text-center">
                   <th className="border border-slate-900 p-1 w-10">NO</th>
@@ -915,24 +915,25 @@ function App() {
               </tbody>
             </table>
 
-            {/* Area TTD Guru Dinamis Sesuai Mapel */}
-            <div className="mt-4 flex justify-end font-sans">
-              <div className="w-56 text-left text-[8.5pt]">
+            {/* Area TTD Guru (Dinamis Sesuai Mapel) */}
+            <div className="mt-5 flex justify-end font-sans">
+              <div className="w-56 text-left text-[9pt]">
                 <p>Damai, {new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
                 <p className="font-normal mb-1">{previewData.subjectRole},</p>
                 
-                <div className="h-12 my-1 flex items-center justify-start">
+                <div className="h-14 my-1 flex items-center justify-start">
                   {previewData.signatureUrl ? (
-                    <img src={previewData.signatureUrl} alt="TTD Guru" className="max-h-12 max-w-[150px] object-contain" />
+                    <img src={previewData.signatureUrl} alt="TTD Guru" className="max-h-14 max-w-[160px] object-contain" />
                   ) : (
                     <div className="h-10 border-b border-dashed border-slate-300 w-full flex items-center text-[7pt] text-slate-400">(Belum ada foto TTD)</div>
                   )}
                 </div>
 
-                <p className="font-bold underline text-[9pt]">{previewData.teacherName}</p>
-                <p className="text-[8pt] text-slate-600">NIP. {previewData.teacherNip}</p>
+                <p className="font-bold underline text-[9.5pt]">{previewData.teacherName}</p>
+                <p className="text-[8.5pt] text-slate-600">NIP. {previewData.teacherNip}</p>
               </div>
             </div>
+
           </div>
         </div>
       )}
