@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from './supabaseClient';
 import { compressAndUpload } from './utils/compressor';
 import { generatePDFReport } from './utils/pdfGenerator';
-import { BookOpen, Calendar, Search, FileText, LogIn, LogOut, Camera, Check, Edit3 } from 'lucide-react';
+import { BookOpen, FileText, LogIn, LogOut, Check, UserCheck, Upload } from 'lucide-react';
 
 export default function App() {
   const [session, setSession] = useState(null);
@@ -13,10 +13,9 @@ export default function App() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
 
-  // Config Guru (Untuk PDF - tidak di-push ke GitHub)
-  const [teacherName, setTeacherName] = useState(localStorage.getItem('teacherName') || '');
-  const [teacherNip, setTeacherNip] = useState(localStorage.getItem('teacherNip') || '');
-  const [signatureImg, setSignatureImg] = useState(localStorage.getItem('teacherSig') || '');
+  // Profil Guru (Otomatis Di-fetch dari Supabase)
+  const [profile, setProfile] = useState({ full_name: '', nip: '', signature_url: '' });
+  const [uploadingSig, setUploadingSig] = useState(false);
 
   // State Form Jurnal
   const [selectedClass, setSelectedClass] = useState('7');
@@ -29,12 +28,70 @@ export default function App() {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => setSession(session));
-    supabase.auth.onAuthStateChange((_event, session) => setSession(session));
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      if (session) fetchProfile(session.user.id);
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+      if (session) fetchProfile(session.user.id);
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
 
+  // Fetch Profil Guru dari Supabase
+  const fetchProfile = async (userId) => {
+    try {
+      let { data, error } = await supabase.from('profiles').select('*').eq('id', userId).single();
+      if (data) {
+        setProfile(data);
+      }
+    } catch (err) {
+      console.error('Gagal mengambil profil:', err);
+    }
+  };
+
+  // Simpan / Update Profil Guru
+  const handleSaveProfile = async () => {
+    if (!session) return;
+    setLoading(true);
+    const updates = {
+      id: session.user.id,
+      full_name: profile.full_name,
+      nip: profile.nip,
+      signature_url: profile.signature_url,
+      updated_at: new Date()
+    };
+
+    const { error } = await supabase.from('profiles').upsert(updates);
+    setLoading(false);
+    if (!error) alert('Profil & TTD berhasil diperbarui di Supabase!');
+    else alert('Gagal menyimpan profil: ' + error.message);
+  };
+
+  // Upload TTD ke Storage Supabase
+  const handleSignatureUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file || !session) return;
+
+    setUploadingSig(true);
+    const fileName = `${session.user.id}-ttd.png`;
+
+    const { data, error } = await supabase.storage.from('signatures').upload(fileName, file, { upsert: true });
+
+    if (!error) {
+      const { data: publicUrlData } = supabase.storage.from('signatures').getPublicUrl(fileName);
+      setProfile(prev => ({ ...prev, signature_url: publicUrlData.publicUrl }));
+    } else {
+      alert('Gagal upload TTD: ' + error.message);
+    }
+    setUploadingSig(false);
+  };
+
   useEffect(() => {
-    // Standard Siswa Default Dummy
+    // Default Siswa
     const mockStudents = [
       { id: '1', name: 'Ahmad Rizky', nis: '1001' },
       { id: '2', name: 'Biti Rahma', nis: '1002' },
@@ -42,7 +99,6 @@ export default function App() {
     ];
     setStudents(mockStudents);
 
-    // Default Kehadiran = Hadir
     const initAtt = {};
     mockStudents.forEach(s => initAtt[s.id] = 'Hadir');
     setAttendance(initAtt);
@@ -54,20 +110,8 @@ export default function App() {
     if (error) alert('Login Gagal: ' + error.message);
   };
 
-  const handleSignatureUpload = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setSignatureImg(reader.result);
-        localStorage.setItem('teacherSig', reader.result);
-      };
-      reader.readAsDataURL(file);
-    }
-  };
-
   const handleSubmitJurnal = async () => {
-    if (isDemo) return alert('Mode Demo: Data tidak tersimpan ke Database.');
+    if (isDemo) return alert('Mode Demo: Data tidak tersimpan.');
     setLoading(true);
 
     let photoUrls = [];
@@ -122,10 +166,7 @@ export default function App() {
             </button>
           </form>
           <div className="mt-4 text-center">
-            <button 
-              onClick={() => setIsDemo(true)} 
-              className="text-sm text-slate-500 underline"
-            >
+            <button onClick={() => setIsDemo(true)} className="text-sm text-slate-500 underline">
               Masuk Mode Demo (Tanpa Login)
             </button>
           </div>
@@ -141,7 +182,7 @@ export default function App() {
         <div>
           <h2 className="font-bold text-lg">Jurnal Guru SMP</h2>
           <span className="text-xs bg-blue-700 px-2 py-0.5 rounded-full">
-            {isDemo ? 'Mode Demo' : 'Mode Terhubung'}
+            {isDemo ? 'Mode Demo' : `Guru: ${profile.full_name || 'Terhubung'}`}
           </span>
         </div>
         <button onClick={() => { supabase.auth.signOut(); setIsDemo(false); }} className="p-2">
@@ -189,11 +230,11 @@ export default function App() {
               <input 
                 type="file" multiple accept="image/*" capture="environment"
                 onChange={e => setPhotos(Array.from(e.target.files))}
-                className="w-full mt-1 text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                className="w-full mt-1 text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700"
               />
             </div>
 
-            {/* Presensi dan Nilai */}
+            {/* Presensi */}
             <div className="space-y-2">
               <h3 className="font-bold text-slate-700 text-sm">Presensi & Nilai Siswa</h3>
               {students.map(student => (
@@ -235,53 +276,76 @@ export default function App() {
 
         {activeTab === 'config' && (
           <div className="bg-white p-4 rounded-xl border space-y-4">
-            <h3 className="font-bold text-slate-800 border-b pb-2">Pengaturan Identitas & TTD PDF</h3>
+            <h3 className="font-bold text-slate-800 border-b pb-2">Profil Guru & TTD Auto-Fetch</h3>
+            
             <div>
-              <label className="text-xs font-semibold text-slate-600">Nama Guru</label>
+              <label className="text-xs font-semibold text-slate-600">Nama Lengkap Guru</label>
               <input 
                 type="text" className="w-full p-2 border rounded-xl mt-1 text-sm"
-                value={teacherName} onChange={e => { setTeacherName(e.target.value); localStorage.setItem('teacherName', e.target.value); }}
+                value={profile.full_name || ''} 
+                onChange={e => setProfile({...profile, full_name: e.target.value})}
               />
             </div>
+
             <div>
               <label className="text-xs font-semibold text-slate-600">NIP Guru</label>
               <input 
                 type="text" className="w-full p-2 border rounded-xl mt-1 text-sm"
-                value={teacherNip} onChange={e => { setTeacherNip(e.target.value); localStorage.setItem('teacherNip', e.target.value); }}
+                value={profile.nip || ''} 
+                onChange={e => setProfile({...profile, nip: e.target.value})}
               />
             </div>
+
             <div>
-              <label className="text-xs font-semibold text-slate-600">File Tanda Tangan (PNG Transparan)</label>
+              <label className="text-xs font-semibold text-slate-600">File TTD Digital (PNG Transparan)</label>
               <input type="file" accept="image/*" onChange={handleSignatureUpload} className="w-full mt-1 text-sm" />
-              {signatureImg && <img src={signatureImg} alt="TTD" className="h-16 mt-2 border p-1 rounded" />}
+              {uploadingSig && <p className="text-xs text-blue-600 mt-1">Mengunggah TTD ke Supabase...</p>}
+              {profile.signature_url && (
+                <div className="mt-2">
+                  <p className="text-[10px] text-slate-400">TTD Terdaftar:</p>
+                  <img src={profile.signature_url} alt="TTD Guru" className="h-16 border p-1 rounded bg-slate-50" />
+                </div>
+              )}
             </div>
+
+            <button 
+              onClick={handleSaveProfile} disabled={loading}
+              className="w-full bg-slate-800 text-white py-2 rounded-xl text-xs font-semibold"
+            >
+              Simpan Profil ke Database
+            </button>
+
+            <hr />
+
             <button 
               onClick={() => {
                 generatePDFReport({
                   title: `Rekap Presensi & Nilai Kelas ${selectedClass}`,
                   headers: ['NIS', 'Nama Siswa', 'Status Presensi', 'Nilai'],
                   rows: students.map(s => [s.nis, s.name, attendance[s.id] || 'Hadir', grades[s.id] || '-']),
-                  teacherName, teacherNip, signatureBase64: signatureImg
+                  teacherName: profile.full_name, 
+                  teacherNip: profile.nip, 
+                  signatureBase64: profile.signature_url
                 });
               }}
-              className="w-full bg-green-600 text-white py-2.5 rounded-xl text-sm font-semibold flex items-center justify-center space-x-2"
+              className="w-full bg-green-600 text-white py-2.5 rounded-xl text-sm font-semibold flex items-center justify-center space-x-2 shadow"
             >
               <FileText className="w-4 h-4" />
-              <span>Test Export PDF</span>
+              <span>Cetak / Download PDF Laporan</span>
             </button>
           </div>
         )}
       </div>
 
-      {/* Navigation Bar Footer */}
+      {/* Navigation Footer */}
       <div className="fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-white border-t flex justify-around p-2 z-20">
         <button onClick={() => setActiveTab('input')} className={`p-2 flex flex-col items-center ${activeTab === 'input' ? 'text-blue-600' : 'text-slate-400'}`}>
           <BookOpen className="w-5 h-5" />
           <span className="text-[10px] mt-1 font-medium">Input Jurnal</span>
         </button>
         <button onClick={() => setActiveTab('config')} className={`p-2 flex flex-col items-center ${activeTab === 'config' ? 'text-blue-600' : 'text-slate-400'}`}>
-          <FileText className="w-5 h-5" />
-          <span className="text-[10px] mt-1 font-medium">Laporan & TTD</span>
+          <UserCheck className="w-5 h-5" />
+          <span className="text-[10px] mt-1 font-medium">Profil & PDF</span>
         </button>
       </div>
     </div>
