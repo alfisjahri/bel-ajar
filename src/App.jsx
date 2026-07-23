@@ -83,7 +83,7 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [fetchingStudents, setFetchingStudents] = useState(false);
 
-  // Filter Rekap Laporan
+  // Filter Rekap Laporan (Tab Export)
   const [reportPeriod, setReportPeriod] = useState('bulanan');
   const [reportClass, setReportClass] = useState('7');
   const [reportSubject, setReportSubject] = useState('Matematika');
@@ -580,6 +580,41 @@ function App() {
     setShowPreviewModal(true);
   };
 
+  // 🔥 FIX BAZOOKA: FETCH SISWA YANG BENAR-BENAR SESUAI `reportClass` UNTUK TAB EXPORT
+  const handleTriggerExportPreview = async () => {
+    setLoading(true);
+    let targetStudents = [];
+
+    if (isDemo) {
+      targetStudents = [
+        { id: '1', name: 'AERELLYN BELVIA', class_name: reportClass },
+        { id: '2', name: 'AFIFATUL AZIZAH', class_name: reportClass }
+      ];
+    } else {
+      const { data } = await supabase
+        .from('students')
+        .select('*')
+        .eq('class_name', reportClass)
+        .order('name', { ascending: true });
+      if (data) targetStudents = data;
+    }
+
+    const rows = targetStudents.map((s, idx) => [
+      idx + 1, 
+      s.name, 
+      attendance[s.id] || 'Hadir', 
+      grades[s.id] || '-'
+    ]);
+
+    handleOpenPrintPreview(
+      `REKAPITULASI PRESENSI & NILAI SISWA (${reportPeriod.toUpperCase()})`,
+      `SMPN 1 Damai  |  Kelas: ${reportClass}  |  Mata Pelajaran: ${reportSubject}`,
+      reportSubject,
+      rows
+    );
+    setLoading(false);
+  };
+
   const handleOpenPrintPreview = (title, subtitle, subjectName, rows) => {
     setPreviewData({
       title,
@@ -1031,7 +1066,7 @@ function App() {
           </div>
         )}
 
-        {/* TAB 3: MANAGEMENT SISWA + CHIP SORTASI PRESENSI */}
+        {/* TAB 3: MANAGEMENT SISWA */}
         {activeTab === 'siswa' && (
           <div className="space-y-4">
             <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm space-y-3">
@@ -1081,7 +1116,6 @@ function App() {
                 />
               </div>
 
-              {/* CHIP SORTASI PRESENSI SISWA */}
               <div className="flex items-center gap-1.5 pt-1 overflow-x-auto">
                 <span className="text-[10px] font-bold text-slate-400 mr-1 flex items-center gap-0.5">
                   <Filter className="w-3 h-3" /> Filter:
@@ -1107,7 +1141,6 @@ function App() {
               </div>
             </div>
 
-            {/* LIST SISWA TERFILTER */}
             <div className="space-y-2">
               <p className="text-xs text-slate-500 font-bold px-1">Total Siswa: {filteredAllStudents.length}</p>
               {filteredAllStudents.length === 0 ? (
@@ -1175,7 +1208,7 @@ function App() {
           </div>
         )}
 
-        {/* 🔥 TAB 4: EXPORT LAPORAN REKAP & PROFIL GURU */}
+        {/* TAB 4: EXPORT LAPORAN REKAP & PROFIL GURU */}
         {activeTab === 'profile' && (
           <div className="space-y-4">
             <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-3">
@@ -1239,25 +1272,13 @@ function App() {
                 </div>
               )}
 
+              {/* 🔥 TOMBOL EXPORT DENGAN FETCH SISWA DINAMIS SESUAI reportClass */}
               <button 
-                onClick={() => {
-                  const rows = students.map((s, idx) => [
-                    idx + 1, 
-                    s.name, 
-                    attendance[s.id] || 'Hadir', 
-                    grades[s.id] || '-'
-                  ]);
-                  handleOpenPrintPreview(
-                    `REKAPITULASI PRESENSI & NILAI SISWA (${reportPeriod.toUpperCase()})`,
-                    `SMPN 1 Damai  |  Kelas: ${reportClass}  |  Mata Pelajaran: ${reportSubject}`,
-                    reportSubject,
-                    rows
-                  );
-                }}
+                onClick={handleTriggerExportPreview} disabled={loading}
                 className="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-3 rounded-xl font-bold text-xs flex items-center justify-center space-x-2 transition-all shadow"
               >
                 <Eye className="w-4 h-4" />
-                <span>Preview Laporan & TTD</span>
+                <span>{loading ? 'Memuat Data Siswa...' : 'Preview Laporan & TTD'}</span>
               </button>
             </div>
 
@@ -1324,7 +1345,7 @@ function App() {
 
       </div>
 
-      {/* 🔥 FLOATING FOOTER NAVIGATION (TAB PROFIL UDAH DIGANTI EXPORT) */}
+      {/* FLOATING FOOTER NAVIGATION */}
       <div className="no-print fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-white/95 backdrop-blur-md border-t border-slate-200 flex justify-around p-2 z-30 rounded-t-2xl shadow-lg">
         <button onClick={() => setActiveTab('input')} className={`p-2 flex flex-col items-center ${activeTab === 'input' ? 'text-blue-600 font-bold scale-105' : 'text-slate-400'}`}>
           <BookOpen className="w-5 h-5" />
@@ -1384,7 +1405,7 @@ function App() {
         </div>
       )}
 
-      {/* 🔥 MODAL LIGHTBOX FOTO PREVIEW FULLSCREEN (Z-INDEX 70 AGAR SELALU DI DEPAN MODAL APAPUN) */}
+      {/* MODAL LIGHTBOX FOTO PREVIEW FULLSCREEN (Z-INDEX 70) */}
       {selectedImageModal && (
         <div className="fixed inset-0 z-[70] bg-black/90 backdrop-blur-md flex items-center justify-center p-4">
           <button 
