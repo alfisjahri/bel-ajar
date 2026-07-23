@@ -2,38 +2,36 @@
 @tailwind components;
 @tailwind utilities;
 
-/* CSS Khusus Saat Cetak / Save as PDF */
+/* CSS Khusus Saat Cetak / Save as PDF Bawaan HP */
 @media print {
-  body {
-    background-color: white !important;
-    color: black !important;
+  body, html {
+    background: #ffffff !important;
+    color: #000000 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
   }
   
-  /* Sembunyikan semua elemen UI web aplikasi */
-  .no-print, nav, header, button, footer {
+  /* Sembunyikan Navigasi, Header, & Tombol Aplikasi */
+  .no-print {
     display: none !important;
   }
 
-  /* Tampilkan area dokumen laporan saja */
-  .print-only {
-    display: block !important;
-    position: absolute;
-    left: 0;
-    top: 0;
-    width: 100%;
-    margin: 0;
-    padding: 0;
+  /* Buat Dokumen Laporan Penuh 100% Memenuhi Kertas A4/Letter/F4 */
+  .print-document {
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    box-shadow: none !important;
+    border: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
   }
 
   @page {
-    size: A4 portrait;
-    margin: 10mm 12mm 10mm 12mm;
-  }
-}
-
-/* Sembunyikan dokumen print saat di layar normal */
-@media screen {
-  .print-only {
-    display: none;
+    size: portrait;
+    margin: 10mm 15mm 10mm 15mm;
   }
 }
