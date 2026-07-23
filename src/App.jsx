@@ -4,7 +4,8 @@ import { compressAndUpload } from './utils/compressor';
 import { generatePDFReport } from './utils/pdfGenerator';
 import { 
   BookOpen, FileText, LogOut, Check, UserCheck, 
-  Search, Edit3, Image as ImageIcon, Users, RefreshCw
+  Search, Edit3, Image as ImageIcon, Users, RefreshCw,
+  UserPlus, Trash2, Edit, Save, X
 } from 'lucide-react';
 
 export default function App() {
@@ -19,9 +20,9 @@ export default function App() {
   // Profil Guru Auto-Fetch
   const [profile, setProfile] = useState({ full_name: '', nip: '', signature_url: '' });
 
-  // Form State
-  const [selectedClass, setSelectedClass] = useState('9A'); // Default Kelas 9A
-  const [selectedSubject, setSelectedSubject] = useState('Koding');
+  // Form State Jurnal
+  const [selectedClass, setSelectedClass] = useState('7');
+  const [selectedSubject, setSelectedSubject] = useState('Matematika');
   const [material, setMaterial] = useState('');
   const [photos, setPhotos] = useState([]);
   const [students, setStudents] = useState([]);
@@ -30,9 +31,29 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [fetchingStudents, setFetchingStudents] = useState(false);
 
-  // History & Search
+  // Management Siswa State (CRUD)
+  const [allStudents, setAllStudents] = useState([]);
+  const [searchStudentQuery, setSearchStudentQuery] = useState('');
+  const [isAddingStudent, setIsAddingStudent] = useState(false);
+  const [newStudent, setNewStudent] = useState({ name: '', class_name: '7' });
+  const [editingStudent, setEditingStudent] = useState(null); // id siswa yang sedang diedit
+
+  // History Jurnal
   const [journalsHistory, setJournalsHistory] = useState([]);
-  const [searchQuery, setSearchQuery] = useState('');
+
+  // 🔥 1. MAPEL OTOMATIS BERDASARKAN KELAS
+  useEffect(() => {
+    if (selectedClass === '7') {
+      setSelectedSubject('Matematika');
+    } else if (selectedClass === '9A' || selectedClass === '9B') {
+      setSelectedSubject('Koding');
+    } else {
+      // Kelas 8A dan 8B default Matematika jika tidak diset
+      if (selectedSubject !== 'Matematika' && selectedSubject !== 'Koding') {
+        setSelectedSubject('Matematika');
+      }
+    }
+  }, [selectedClass]);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -53,19 +74,17 @@ export default function App() {
     if (data) setProfile(data);
   };
 
-  // 🔥 FIX: Auto-Fetch Data Siswa Sesuai Kelas
+  // Fetch Siswa per Kelas untuk Jurnal
   useEffect(() => {
     fetchStudentsByClass(selectedClass);
   }, [selectedClass, isDemo]);
 
   const fetchStudentsByClass = async (className) => {
     setFetchingStudents(true);
-
     if (isDemo) {
       const mockData = [
-        { id: '1', name: 'ALMITA NAIYA HANISA', class_name: className },
-        { id: '2', name: 'CHAROLYNA ADELYA LESTARI', class_name: className },
-        { id: '3', name: 'CLEVER NAHANIELO ALKARICK', class_name: className }
+        { id: '1', name: 'AERELLYN BELVIA', class_name: className },
+        { id: '2', name: 'AFIFATUL AZIZAH', class_name: className }
       ];
       setStudents(mockData);
       initAttendance(mockData);
@@ -73,7 +92,6 @@ export default function App() {
       return;
     }
 
-    // Query ke Supabase
     const { data, error } = await supabase
       .from('students')
       .select('*')
@@ -84,10 +102,69 @@ export default function App() {
       setStudents(data);
       initAttendance(data);
     } else {
-      console.error('Error fetching students:', error);
       setStudents([]);
     }
     setFetchingStudents(false);
+  };
+
+  // 🔥 Fetch Semua Siswa untuk Management Tab "Siswa"
+  const fetchAllStudents = async () => {
+    if (isDemo) return;
+    const { data } = await supabase.from('students').select('*').order('name', { ascending: true });
+    if (data) setAllStudents(data);
+  };
+
+  useEffect(() => {
+    if (activeTab === 'siswa') fetchAllStudents();
+  }, [activeTab]);
+
+  // CRUD SISWA
+  const handleAddStudent = async (e) => {
+    e.preventDefault();
+    if (!newStudent.name.trim()) return;
+
+    const { data, error } = await supabase.from('students').insert([
+      { name: newStudent.name.toUpperCase(), class_name: newStudent.class_name }
+    ]).select();
+
+    if (!error) {
+      alert('Siswa berhasil ditambahkan!');
+      setNewStudent({ name: '', class_name: '7' });
+      setIsAddingStudent(false);
+      fetchAllStudents();
+      fetchStudentsByClass(selectedClass);
+    } else {
+      alert('Gagal menambah siswa: ' + error.message);
+    }
+  };
+
+  const handleUpdateStudent = async (id) => {
+    const { error } = await supabase.from('students').update({
+      name: editingStudent.name.toUpperCase(),
+      class_name: editingStudent.class_name
+    }).eq('id', id);
+
+    if (!error) {
+      alert('Data siswa berhasil diperbarui!');
+      setEditingStudent(null);
+      fetchAllStudents();
+      fetchStudentsByClass(selectedClass);
+    } else {
+      alert('Gagal memperbarui siswa: ' + error.message);
+    }
+  };
+
+  const handleDeleteStudent = async (id, name) => {
+    if (!window.confirm(`Yakin ingin menghapus siswa ${name}?`)) return;
+
+    const { error } = await supabase.from('students').delete().eq('id', id);
+    if (!error) {
+      alert('Siswa terhapus!');
+      fetchAllStudents();
+      fetchStudentsByClass(selectedClass);
+    } else {
+      alert('Gagal menghapus siswa: ' + error.message);
+    }
   };
 
   const initAttendance = (studentList) => {
@@ -95,16 +172,6 @@ export default function App() {
     studentList.forEach(s => att[s.id] = 'Hadir');
     setAttendance(att);
   };
-
-  const fetchJournalsHistory = async () => {
-    if (isDemo) return;
-    const { data } = await supabase.from('journals').select('*').order('created_at', { ascending: false });
-    if (data) setJournalsHistory(data);
-  };
-
-  useEffect(() => {
-    if (activeTab === 'edit') fetchJournalsHistory();
-  }, [activeTab]);
 
   const handleSubmitJurnal = async () => {
     if (isDemo) return alert('Mode Demo: Data tidak tersimpan.');
@@ -148,13 +215,11 @@ export default function App() {
     if (error) alert('Login Gagal: ' + error.message);
   };
 
-  // LOGIN PAGE
   if (!session && !isDemo) {
     return (
       <div className="min-h-screen bg-gradient-to-b from-blue-700 to-indigo-900 flex items-center justify-center p-4">
         <div className="bg-white/95 backdrop-blur-lg p-8 rounded-3xl shadow-2xl w-full max-w-sm border border-white/20">
           <div className="text-center mb-6">
-            {/* Logo Bel Ajar */}
             <div className="bg-blue-50 p-3 rounded-2xl w-20 h-20 mx-auto flex items-center justify-center mb-3 shadow-inner">
               <img 
                 src="/logo.png" 
@@ -199,6 +264,11 @@ export default function App() {
     );
   }
 
+  const filteredAllStudents = allStudents.filter(s => 
+    s.name.toLowerCase().includes(searchStudentQuery.toLowerCase()) ||
+    s.class_name.toLowerCase().includes(searchStudentQuery.toLowerCase())
+  );
+
   return (
     <div className="min-h-screen bg-slate-100 pb-24 max-w-md mx-auto relative shadow-2xl border-x border-slate-200 font-sans">
       
@@ -236,31 +306,34 @@ export default function App() {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-xs font-bold text-slate-500 block mb-1">Kelas</label>
-                  <div>
-  <label className="text-xs font-bold text-slate-500 block mb-1">Kelas</label>
-  <select 
-    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700"
-    value={selectedClass} 
-    onChange={e => setSelectedClass(e.target.value)}
-  >
-    <option value="9A">Kelas 9A</option>
-    <option value="9B">Kelas 9B</option>
-    <option value="8A">Kelas 8A</option>
-    <option value="8B">Kelas 8B</option>
-    <option value="7">Kelas 7</option>
-  </select>
-</div>
+                  <select 
+                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700"
+                    value={selectedClass} 
+                    onChange={e => setSelectedClass(e.target.value)}
+                  >
+                    <option value="7">Kelas 7</option>
+                    <option value="8A">Kelas 8A</option>
+                    <option value="8B">Kelas 8B</option>
+                    <option value="9A">Kelas 9A</option>
+                    <option value="9B">Kelas 9B</option>
+                  </select>
                 </div>
 
+                {/* 🔥 DINAMIS PENGATURAN MAPEL */}
                 <div>
                   <label className="text-xs font-bold text-slate-500 block mb-1">Mata Pelajaran</label>
                   <select 
-                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700"
+                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 disabled:opacity-75"
                     value={selectedSubject} 
                     onChange={e => setSelectedSubject(e.target.value)}
+                    disabled={selectedClass === '7' || selectedClass === '9A' || selectedClass === '9B'}
                   >
-                    <option value="Matematika">Matematika</option>
-                    <option value="Koding">Koding</option>
+                    {(selectedClass === '7' || selectedClass === '8A' || selectedClass === '8B') && (
+                      <option value="Matematika">Matematika</option>
+                    )}
+                    {(selectedClass === '8A' || selectedClass === '8B' || selectedClass === '9A' || selectedClass === '9B') && (
+                      <option value="Koding">Koding</option>
+                    )}
                   </select>
                 </div>
               </div>
@@ -341,7 +414,7 @@ export default function App() {
           </div>
         )}
 
-        {/* TAB 2: EDIT JURNAL */}
+        {/* TAB 2: REVIEW JURNAL */}
         {activeTab === 'edit' && (
           <div className="space-y-4">
             <h3 className="font-bold text-slate-800 text-xs">Riwayat Jurnal Mengajar Bel Ajar</h3>
@@ -363,16 +436,102 @@ export default function App() {
           </div>
         )}
 
-        {/* TAB 3: SEARCH SISWA */}
-        {activeTab === 'search' && (
+        {/* 🔥 TAB 3: MANAGEMENT SISWA (CRUD LENGKAP) */}
+        {activeTab === 'siswa' && (
           <div className="space-y-4">
             <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm space-y-3">
-              <h3 className="font-bold text-slate-800 text-xs">Cek Presensi Per Siswa</h3>
-              <input 
-                type="text" placeholder="Ketik nama siswa..." 
-                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold"
-                value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
-              />
+              <div className="flex justify-between items-center">
+                <h3 className="font-extrabold text-slate-800 text-sm">Kelola Data Siswa</h3>
+                <button 
+                  onClick={() => setIsAddingStudent(!isAddingStudent)}
+                  className="bg-blue-600 text-white px-3 py-1.5 rounded-xl text-xs font-bold flex items-center space-x-1"
+                >
+                  <UserPlus className="w-3.5 h-3.5" />
+                  <span>Tambah Siswa</span>
+                </button>
+              </div>
+
+              {/* Form Tambah Siswa */}
+              {isAddingStudent && (
+                <form onSubmit={handleAddStudent} className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
+                  <p className="text-xs font-bold text-slate-700">Tambah Siswa Baru</p>
+                  <input 
+                    type="text" placeholder="Nama Lengkap Siswa"
+                    className="w-full p-2 bg-white border border-slate-200 rounded-lg text-xs font-semibold"
+                    value={newStudent.name} onChange={e => setNewStudent({...newStudent, name: e.target.value})}
+                    required
+                  />
+                  <div className="flex gap-2">
+                    <select 
+                      className="p-2 bg-white border border-slate-200 rounded-lg text-xs font-bold flex-1"
+                      value={newStudent.class_name} onChange={e => setNewStudent({...newStudent, class_name: e.target.value})}
+                    >
+                      <option value="7">Kelas 7</option>
+                      <option value="8A">Kelas 8A</option>
+                      <option value="8B">Kelas 8B</option>
+                      <option value="9A">Kelas 9A</option>
+                      <option value="9B">Kelas 9B</option>
+                    </select>
+                    <button type="submit" className="bg-emerald-600 text-white px-4 text-xs font-bold rounded-lg">Simpan</button>
+                    <button type="button" onClick={() => setIsAddingStudent(false)} className="bg-slate-200 text-slate-700 px-3 text-xs font-bold rounded-lg">Batal</button>
+                  </div>
+                </form>
+              )}
+
+              {/* Search Bar */}
+              <div className="relative">
+                <Search className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
+                <input 
+                  type="text" placeholder="Cari nama atau kelas..." 
+                  className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold"
+                  value={searchStudentQuery} onChange={e => setSearchStudentQuery(e.target.value)}
+                />
+              </div>
+            </div>
+
+            {/* List Siswa */}
+            <div className="space-y-2">
+              <p className="text-xs text-slate-500 font-bold px-1">Total Siswa: {filteredAllStudents.length}</p>
+              {filteredAllStudents.map(student => (
+                <div key={student.id} className="bg-white p-3 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between gap-2">
+                  {editingStudent?.id === student.id ? (
+                    <div className="flex-1 flex gap-2">
+                      <input 
+                        type="text" 
+                        className="p-1.5 border rounded-lg text-xs font-semibold flex-1"
+                        value={editingStudent.name} onChange={e => setEditingStudent({...editingStudent, name: e.target.value})}
+                      />
+                      <select 
+                        className="p-1.5 border rounded-lg text-xs font-bold"
+                        value={editingStudent.class_name} onChange={e => setEditingStudent({...editingStudent, class_name: e.target.value})}
+                      >
+                        <option value="7">7</option>
+                        <option value="8A">8A</option>
+                        <option value="8B">8B</option>
+                        <option value="9A">9A</option>
+                        <option value="9B">9B</option>
+                      </select>
+                      <button onClick={() => handleUpdateStudent(student.id)} className="text-emerald-600 p-1"><Save className="w-4 h-4" /></button>
+                      <button onClick={() => setEditingStudent(null)} className="text-slate-400 p-1"><X className="w-4 h-4" /></button>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-bold text-xs text-slate-800 truncate">{student.name}</p>
+                        <span className="text-[10px] font-bold bg-blue-50 text-blue-600 px-2 py-0.5 rounded-md">Kelas {student.class_name}</span>
+                      </div>
+                      <div className="flex items-center space-x-1">
+                        <button onClick={() => setEditingStudent(student)} className="p-1.5 text-slate-500 hover:text-blue-600">
+                          <Edit className="w-4 h-4" />
+                        </button>
+                        <button onClick={() => handleDeleteStudent(student.id, student.name)} className="p-1.5 text-slate-400 hover:text-red-600">
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              ))}
             </div>
           </div>
         )}
@@ -428,8 +587,8 @@ export default function App() {
           <Edit3 className="w-5 h-5" />
           <span className="text-[10px] mt-1">Review</span>
         </button>
-        <button onClick={() => setActiveTab('search')} className={`p-2 flex flex-col items-center ${activeTab === 'search' ? 'text-blue-600 font-bold scale-105' : 'text-slate-400'}`}>
-          <Search className="w-5 h-5" />
+        <button onClick={() => setActiveTab('siswa')} className={`p-2 flex flex-col items-center ${activeTab === 'siswa' ? 'text-blue-600 font-bold scale-105' : 'text-slate-400'}`}>
+          <Users className="w-5 h-5" />
           <span className="text-[10px] mt-1">Siswa</span>
         </button>
         <button onClick={() => setActiveTab('profile')} className={`p-2 flex flex-col items-center ${activeTab === 'profile' ? 'text-blue-600 font-bold scale-105' : 'text-slate-400'}`}>
