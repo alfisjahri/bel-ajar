@@ -17,8 +17,12 @@ function App() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
 
-  // Profil Guru Auto-Fetch & Save
-  const [profile, setProfile] = useState({ full_name: 'NUR ALFI SYAHRI, S.P.', nip: '199808242025211073', signature_url: '' });
+  // Profil Guru (Aman: Tanpa Hardcode NIP / TTD di Repo)
+  const [profile, setProfile] = useState({ 
+    full_name: localStorage.getItem('teacher_name') || '', 
+    nip: localStorage.getItem('teacher_nip') || '', 
+    signature_url: localStorage.getItem('teacher_sig') || '' 
+  });
 
   // Form State Jurnal
   const [selectedClass, setSelectedClass] = useState('7');
@@ -78,10 +82,9 @@ function App() {
       let { data } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle();
       if (data) {
         setProfile(data);
-      } else {
-        const newProfile = { id: userId, full_name: 'NUR ALFI SYAHRI, S.P.', nip: '199808242025211073', signature_url: '' };
-        await supabase.from('profiles').insert([newProfile]);
-        setProfile(newProfile);
+        if (data.full_name) localStorage.setItem('teacher_name', data.full_name);
+        if (data.nip) localStorage.setItem('teacher_nip', data.nip);
+        if (data.signature_url) localStorage.setItem('teacher_sig', data.signature_url);
       }
     } catch (err) {
       console.error('Gagal fetch profil:', err);
@@ -100,17 +103,21 @@ function App() {
       updated_at: new Date()
     };
 
+    localStorage.setItem('teacher_name', profile.full_name);
+    localStorage.setItem('teacher_nip', profile.nip);
+    if (profile.signature_url) localStorage.setItem('teacher_sig', profile.signature_url);
+
     const { error } = await supabase.from('profiles').upsert(updates);
     setLoading(false);
 
     if (!error) {
-      alert('✅ Profil, NIP, & TTD tersimpan PERMANEN di Database!');
+      alert('✅ Profil & NIP tersimpan aman!');
     } else {
       alert('Gagal menyimpan profil: ' + error.message);
     }
   };
 
-  // UPLOAD TTD KONVERSI KE BASE64 (AMANS TANPA CORS ERROR)
+  // UPLOAD TTD KONVERSI KE BASE64
   const handleSignatureUpload = (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -119,6 +126,7 @@ function App() {
     reader.onloadend = () => {
       const base64String = reader.result;
       setProfile(prev => ({ ...prev, signature_url: base64String }));
+      localStorage.setItem('teacher_sig', base64String);
       alert('✅ Gambar TTD berhasil dimuat! Klik "Simpan Profil Permanen" di bawah.');
     };
     reader.readAsDataURL(file);
@@ -703,6 +711,7 @@ function App() {
                 <label className="text-xs font-bold text-slate-500 block mb-1">Nama Lengkap Guru</label>
                 <input 
                   type="text" className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold"
+                  placeholder="Masukkan Nama Lengkap & Gelar..."
                   value={profile.full_name || ''} 
                   onChange={e => setProfile({...profile, full_name: e.target.value})}
                 />
@@ -712,6 +721,7 @@ function App() {
                 <label className="text-xs font-bold text-slate-500 block mb-1">NIP Guru</label>
                 <input 
                   type="text" className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold"
+                  placeholder="Masukkan NIP Kamu..."
                   value={profile.nip || ''} 
                   onChange={e => setProfile({...profile, nip: e.target.value})}
                 />
@@ -768,5 +778,4 @@ function App() {
   );
 }
 
-// 🔥 INI BARIS FIX ERROR NYA (Default Export)
 export default App;
