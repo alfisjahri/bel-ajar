@@ -2,8 +2,38 @@
 @tailwind components;
 @tailwind utilities;
 
-body {
-  background-color: #f1f5f9;
-  color: #1e293b;
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+/* CSS Khusus Saat Cetak / Save as PDF */
+@media print {
+  body {
+    background-color: white !important;
+    color: black !important;
+  }
+  
+  /* Sembunyikan semua elemen UI web aplikasi */
+  .no-print, nav, header, button, footer {
+    display: none !important;
+  }
+
+  /* Tampilkan area dokumen laporan saja */
+  .print-only {
+    display: block !important;
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+  }
+
+  @page {
+    size: A4 portrait;
+    margin: 10mm 12mm 10mm 12mm;
+  }
+}
+
+/* Sembunyikan dokumen print saat di layar normal */
+@media screen {
+  .print-only {
+    display: none;
+  }
 }
