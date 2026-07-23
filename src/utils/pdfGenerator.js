@@ -1,37 +1,18 @@
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 
-// Helper konversi URL gambar (TTD/Logo) ke Base64 agar jsPDF bisa me-render gambar dari Supabase
-const urlToBase64 = (url) => {
-  return new Promise((resolve) => {
-    if (!url) return resolve(null);
-    const img = new Image();
-    img.crossOrigin = 'Anonymous';
-    img.onload = () => {
-      const canvas = document.createElement('canvas');
-      canvas.width = img.width;
-      canvas.height = img.height;
-      const ctx = canvas.getContext('2d');
-      ctx.drawImage(img, 0, 0);
-      resolve(canvas.toDataURL('image/png'));
-    };
-    img.onerror = () => resolve(null);
-    img.src = url;
-  });
-};
-
-export const generatePDFReport = async ({ 
+export const generatePDFReport = ({ 
   title, 
   subtitle = '',
   headers, 
   rows, 
   teacherName, 
   teacherNip, 
-  signatureUrl 
+  signatureBase64 
 }) => {
   const doc = new jsPDF('p', 'mm', 'a4');
 
-  // KOP SURAT RESMI
+  // KOP SURAT RESMI DINAS & SEKOLAH
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(11);
   doc.text('PEMERINTAH KABUPATEN KUTAI BARAT', 105, 12, { align: 'center' });
@@ -40,9 +21,9 @@ export const generatePDFReport = async ({
   doc.text('SMP NEGERI 1 DAMAI', 105, 23, { align: 'center' });
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(8);
-  doc.text('Alamat: Jl. Poros Damai, Kecamatan Damai, Kabupaten Kutai Barat', 105, 27, { align: 'center' });
+  doc.text('Alamat: Jl. Poros Damai, Kecamatan Damai, Kabupaten Kutai Barat, Kalimantan Timur', 105, 27, { align: 'center' });
 
-  // Garis Kop Surat
+  // Garis Kop Surat Ganda
   doc.setLineWidth(0.8);
   doc.line(14, 30, 196, 30);
   doc.setLineWidth(0.2);
@@ -58,7 +39,7 @@ export const generatePDFReport = async ({
     doc.text(subtitle, 105, 41, { align: 'center' });
   }
 
-  // TABEL DATA SISWA (Compact agar muat 1 halaman)
+  // TABEL REKAP SISWA (Ukuran compact muat 1 halaman A4)
   const startY = subtitle ? 45 : 42;
   doc.autoTable({
     startY: startY,
@@ -75,10 +56,8 @@ export const generatePDFReport = async ({
     margin: { left: 14, right: 14 }
   });
 
-  // TANDA TANGAN & NIP
+  // TANDA TANGAN & NIP (Posisi Kanan Bawah)
   let finalY = doc.lastAutoTable.finalY + 6;
-  
-  // Jika tabel terlalu panjang, pindahkan TTD ke halaman baru secara rapi
   if (finalY > 240) {
     doc.addPage();
     finalY = 20;
@@ -90,15 +69,16 @@ export const generatePDFReport = async ({
   doc.text(`Damai, ${new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}`, rightMargin, finalY);
   doc.text('Guru Mata Pelajaran,', rightMargin, finalY + 4);
 
-  // Load & tempel TTD dari Supabase
-  if (signatureUrl) {
-    const sigBase64 = await urlToBase64(signatureUrl);
-    if (sigBase64) {
-      doc.addImage(sigBase64, 'PNG', rightMargin, finalY + 5, 32, 16);
+  // Render TTD jika Base64 tersedia
+  if (signatureBase64 && signatureBase64.startsWith('data:image')) {
+    try {
+      doc.addImage(signatureBase64, 'PNG', rightMargin, finalY + 5, 35, 16);
+    } catch (e) {
+      console.error('Error rendering signature:', e);
     }
   }
 
-  const nameY = signatureUrl ? finalY + 23 : finalY + 20;
+  const nameY = (signatureBase64 && signatureBase64.startsWith('data:image')) ? finalY + 23 : finalY + 20;
   doc.setFont('helvetica', 'bold');
   doc.text(teacherName || 'NUR ALFI SYAHRI, S.P.', rightMargin, nameY);
   doc.setFont('helvetica', 'normal');
