@@ -34,8 +34,10 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [fetchingStudents, setFetchingStudents] = useState(false);
 
-  // Filter Rekap Laporan
+  // Filter Rekap Laporan & Mapel Laporan
   const [reportPeriod, setReportPeriod] = useState('bulanan');
+  const [reportClass, setReportClass] = useState('7');
+  const [reportSubject, setReportSubject] = useState('Matematika');
   const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
   const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
 
@@ -53,7 +55,7 @@ function App() {
   // History Jurnal
   const [journalsHistory, setJournalsHistory] = useState([]);
 
-  // LOGIKA MAPEL KETAT
+  // 🔥 LOGIKA MAPEL KETAT - TAB JURNAL
   useEffect(() => {
     if (selectedClass === '7') {
       setSelectedSubject('Matematika');
@@ -65,6 +67,19 @@ function App() {
       }
     }
   }, [selectedClass]);
+
+  // 🔥 LOGIKA MAPEL KETAT - TAB PROFIL / REKAP LAPORAN
+  useEffect(() => {
+    if (reportClass === '7') {
+      setReportSubject('Matematika');
+    } else if (reportClass === '9A' || reportClass === '9B') {
+      setReportSubject('Koding');
+    } else if (reportClass === '8A' || reportClass === '8B') {
+      if (reportSubject !== 'Matematika' && reportSubject !== 'Koding') {
+        setReportSubject('Matematika');
+      }
+    }
+  }, [reportClass]);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -650,7 +665,7 @@ function App() {
                   <label className="text-xs font-bold text-slate-500 block mb-1">Kelas Laporan</label>
                   <select 
                     className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700"
-                    value={selectedClass} onChange={e => setSelectedClass(e.target.value)}
+                    value={reportClass} onChange={e => setReportClass(e.target.value)}
                   >
                     <option value="7">Kelas 7</option>
                     <option value="8A">Kelas 8A</option>
@@ -659,6 +674,22 @@ function App() {
                     <option value="9B">Kelas 9B</option>
                   </select>
                 </div>
+              </div>
+
+              {/* 🔥 FIX: DROPDOWN MAPEL DI TAB PROFIL BISA DIPILIH SPESIFIK */}
+              <div>
+                <label className="text-xs font-bold text-slate-500 block mb-1">Mata Pelajaran Laporan</label>
+                <select 
+                  className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700"
+                  value={reportSubject} onChange={e => setReportSubject(e.target.value)}
+                >
+                  {(reportClass === '7' || reportClass === '8A' || reportClass === '8B') && (
+                    <option value="Matematika">Matematika</option>
+                  )}
+                  {(reportClass === '8A' || reportClass === '8B' || reportClass === '9A' || reportClass === '9B') && (
+                    <option value="Koding">Koding</option>
+                  )}
+                </select>
               </div>
 
               {reportPeriod === 'custom' && (
@@ -684,7 +715,7 @@ function App() {
                   ]);
                   handleOpenPrintPreview(
                     `REKAPITULASI PRESENSI & NILAI SISWA (${reportPeriod.toUpperCase()})`,
-                    `SMPN 1 Damai  |  Kelas: ${selectedClass}  |  Mata Pelajaran: ${selectedSubject}`,
+                    `SMPN 1 Damai  |  Kelas: ${reportClass}  |  Mata Pelajaran: ${reportSubject}`,
                     rows
                   );
                 }}
@@ -765,7 +796,7 @@ function App() {
         </button>
       </div>
 
-      {/* 🔥 MODAL PREVIEW DOKUMEN LAPORAN & CETAK SAVE AS PDF (IN-APP) */}
+      {/* MODAL PREVIEW DOKUMEN LAPORAN & CETAK SAVE AS PDF */}
       {showPreviewModal && previewData && (
         <div className="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-sm flex flex-col justify-between p-2 overflow-y-auto">
           {/* Header Action Modal */}
