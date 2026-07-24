@@ -1,68 +1,69 @@
-# 🔔 Bel Ajar — WebApp Jurnal Mengajar Digital SMP
+# 🔔 Bel Ajar — WebApp Jurnal Mengajar Digital
 
-**Bel Ajar** adalah webapp Progressive Web App (PWA) *mobile-first* yang gue buat khusus untuk mempermudah pencatatan jurnal harian mengajar, presensi siswa, dan input nilai di tingkat SMP (Kelas 7 Matematika, Kelas 8A/8B Matematika & Koding, Kelas 9A/9B Koding). 
+**Bel Ajar** adalah aplikasi Progressive Web App (PWA) *mobile-first* yang dirancang untuk mempermudah guru dalam mencatat jurnal mengajar harian, presensi siswa, input nilai harian, hingga melihat riwayat ketertinggalan materi bagi siswa yang tidak hadir. 
 
-Aplikasi ini dirancang serba praktis biar bisa dipakai langsung dari HP pas lagi di kelas, tanpa ribet bawa laptop atau nulis manual di buku jurnal fisik.
+Aplikasi ini dibuat serba praktis supaya bisa diakses langsung lewat layar HP di dalam kelas, tanpa perlu repot bawa laptop atau nulis manual di buku jurnal fisik.
 
 ---
 
 ## 💥 Masalah yang Diatasi
 
-1. **Jurnal Fisik & Rekap Manual yang Ribet**  
-   Pencatatan di buku kertas rawan hilang, kotor, dan makan waktu pas mau bikin rekapitulasi bulanan atau semesteran untuk laporan dinas.
-2. **Dokumentasi Foto Bikin Memori HP Penuh**  
-   Kalo foto kegiatan mengajar diupload gitu aja, file-nya gede-gede. Di Bel Ajar, semua foto dokumentasi otomatis terkompres sebelum masuk database Supabase.
-3. **Format Laporan Harus Resmi Ber-Kop & Ada TTD**  
-   Proses cetak laporan sering berantakan pas di-save ke PDF. Bel Ajar punya fitur modal preview dokumen resmi lengkap dengan Kop Surat Dinas/Sekolah, 2 Logo (Pemkab Kutai Barat & SMPN 1 Damai), serta TTD digital dan NIP yang fleksibel tanpa meng-expose data pribadi ke repository publik.
-4. **Presensi Siswa Kelamaan Kalo Harus Diketik Satu-satu**  
-   Di Bel Ajar, default status siswa pas masuk jurnal adalah **Hadir**. Kalo ada yang berhalangan, tinggal tap radio button **H / S / I / A** yang udah didesain khusus buat layar HP.
+1. **Jurnal Fisik & Rekap Manual yang Memakan Waktu**  
+   Pencatatan di buku kertas rawan rusak/hilang, dan makan waktu lama saat harus merekapitulasi presensi bulanan/semesteran untuk laporan dinas.
+2. **Foto Dokumentasi Pembelajaran Bikin Memori HP Penuh**  
+   File foto kegiatan mengajar yang ukurannya besar bikin penyimpanan cepat habis. Di Bel Ajar, foto otomatis dikompresi sebelum disimpan ke sistem/cloud.
+3. **Format Laporan Harus Resmi (Ber-Kop & Ada TTD Digital)**  
+   Mencetak rekap dari HP sering kali acak-acakan. Bel Ajar menyediakan *print preview* standar cetak dokumen resmi lengkap dengan Kop Surat Sekolah/Dinas, 2 Logo Instansi, serta TTD digital & NIP guru yang rapi dan pas di kertas.
+4. **Siswa Absen Bingung Ketinggalan Materi**  
+   Guru dan siswa sering lupa materi apa yang tertinggal saat siswa tidak masuk. Fitur pelacakan ketertinggalan belajar di aplikasi ini langsung memunculkan materi dan foto dokumentasi pada tanggal siswa tersebut absen.
 
 ---
 
 ## 🚀 Fitur Utama
 
-- **PWA Mobile-First**: Bisa di-install langsung di HP Android/iOS serasa aplikasi native (lengkap sama icon & splash screen).
-- **Auto Mapping Mapel**: Pilihan mata pelajaran otomatis ngunci/nyesuaiin kelas (Kelas 7 = MTK, Kelas 8 = MTK/Koding, Kelas 9 = Koding).
-- **Presensi Radio Card & Nilai Harian**: Tampilan list siswa pakai kartu interaktif yang ramah jempol.
-- **Auto Compress Foto Dokumentasi**: Foto kegiatan pembelajaran otomatis diperkecil ukurannya pas di-upload.
-- **Kelola Data Siswa (CRUD)**: Bisa cari, tambah, edit, atau hapus nama siswa per kelas langsung dari web.
-- **Review Jurnal & Dokumentasi**: Bisa ngeliat foto materi sebelumnya kapan aja meskipun semua siswa hadir (buat nginget materi pekan lalu).
-- **Preview & Export PDF Laporan Resmi**: Cetak rekap harian, mingguan, bulanan, semester, atau custom tanggal yang muat pas di kertas A4 dengan Kop Resmi dan TTD Digital.
-- **Mode Login & Mode Demo**: Menggunakan Supabase Auth untuk akses penuh guru, dan ketersediaan Mode Demo buat yang mau nyoba-nyoba tanpa login.
+- **PWA Mobile-First**: Bisa di-install langsung di HP (Android/iOS) serasa aplikasi native lengkap dengan icon & splash screen bersih.
+- **Form Jurnal & Presensi Interaktif**: Input materi mengajar (bisa backdate tanggal), presensi kartu radio button (H/S/I/A), dan input nilai harian.
+- **Auto Compress Foto Dokumentasi**: Foto kegiatan pembelajaran dari kamera/galeri otomatis diperkecil ukurannya tanpa mengorbankan kualitas visual.
+- **Kelola Data Siswa & Fitur Sortasi**: Manajemen data siswa per kelas serta filter cepat untuk melihat siapa saja siswa yang Sakit, Izin, atau Alfa.
+- **Lacak Materi Ketertinggalan Siswa**: Klik ikon peringatan pada nama siswa untuk melihat ringkasan materi & foto dokumentasi saat siswa berhalangan hadir.
+- **Review & Edit Full Jurnal**: Bisa memperbarui materi, merevisi status presensi, atau menginput nilai susulan kapan saja dari jurnal terdahulu.
+- **Export PDF Laporan Resmi**: Cetak rekap harian, mingguan, bulanan, semester, atau custom tanggal dengan format tabel *zebra-striping* yang rapi, lengkap dengan Kop Surat dan TTD Digital.
+- **Keamanan & Proteksi Bot**: Menggunakan Supabase Auth dengan sistem *lockout* (pemblokiran otomatis 24 jam) jika gagal login 3 kali berturut-turut.
 
 ---
 
 ## 🛠️ Tech Stack
 
 - **Frontend**: React.js + Vite
-- **Styling**: Tailwind CSS
+- **Styling**: Tailwind CSS + Lucide Icons
+- **UI Dialog / Notifikasi**: SweetAlert2
 - **PWA Support**: Vite PWA Plugin
-- **Database & Auth**: Supabase (PostgreSQL + Auth + Storage)
+- **Database & Auth**: Supabase (PostgreSQL + Auth)
 - **Deployment**: Vercel
 
 ---
 
 ## 🍴 Cara Fork & Deploy Sendiri
 
-Kalo mau pake atau kembangin webapp ini buat sekolahmu sendiri, tinggal ikuti langkah berikut:
+Kalo mau pakai atau kembangin webapp ini buat sekolah kamu sendiri, ikuti langkah berikut:
 
 ### 1. Fork Repository
-Klik tombol **Fork** di pojok kanan atas repo ini buat mengkopi proyek ini ke akun GitHub kamu.
+Klik tombol **Fork** di pojok kanan atas repo ini buat meng-copy proyek ke akun GitHub kamu.
 
 ### 2. Setup Supabase Database
 1. Buat proyek baru di [Supabase](https://supabase.com/).
-2. Masuk ke menu **SQL Editor**, lalu jalankan query untuk membuat tabel `students`, `journals`, `attendance`, `grades`, dan `profiles`.
-3. Bikin user baru di menu **Authentication > Users** untuk login guru.
-4. Import data siswamu ke tabel `students` (bisa via CSV langsung dari Google Sheets).
+2. Masuk ke **SQL Editor**, lalu jalankan query untuk membuat tabel `students`, `journals`, `attendance`, `grades`, dan `profiles`.
+3. Buat akun guru di menu **Authentication > Users**.
+4. Import data siswa sekolahmu ke tabel `students`.
 
 ### 3. Deploy ke Vercel
 1. Login ke [Vercel](https://vercel.com/) pakai akun GitHub.
 2. Tambahkan proyek baru dan impor repo hasil fork tadi.
-3. Di bagian **Environment Variables**, tambahkan 2 kunci dari Supabase kamu:
+3. Di bagian **Environment Variables**, isi 2 kunci dari Supabase kamu:
    - `VITE_SUPABASE_URL` = *(URL Project Supabase)*
    - `VITE_SUPABASE_ANON_KEY` = *(Anon API Key Supabase)*
 4. Klik **Deploy**. Selesai!
 
 ---
 
-*Dibuat santuy tapi fungsional untuk efisiensi mengajar harian.* 🚀
+*Dibuat fungsional, efisien, dan siap pakai untuk administrasi guru modern.* 🚀
