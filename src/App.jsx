@@ -21,6 +21,15 @@ const Toast = Swal.mixin({
   timerProgressBar: true
 });
 
+// HELPER ZONA WAKTU LOKAL GMT+8 (WITA) BIAR GAK MUNDUR KE KEMARIN PAS PAGI
+const getWitaDateString = (dateObj = new Date()) => {
+  const witaTime = new Date(dateObj.toLocaleString('en-US', { timeZone: 'Asia/Makassar' }));
+  const year = witaTime.getFullYear();
+  const month = String(witaTime.getMonth() + 1).padStart(2, '0');
+  const day = String(witaTime.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
 // COMPRESS & CONVERT FOTO KE BASE64
 const compressImageToBase64 = (file) => {
   return new Promise((resolve) => {
@@ -70,8 +79,8 @@ function App() {
   });
   const [isProfileOpen, setIsProfileOpen] = useState(false);
 
-  // Form State Jurnal Input
-  const [journalDate, setStartDateJournal] = useState(new Date().toISOString().split('T')[0]);
+  // Form State Jurnal Input (DEFAULT GMT+8 WITA)
+  const [journalDate, setStartDateJournal] = useState(getWitaDateString());
   const [selectedClass, setSelectedClass] = useState('7');
   const [selectedSubject, setSelectedSubject] = useState('Matematika');
   const [material, setMaterial] = useState('');
@@ -87,8 +96,8 @@ function App() {
   const [reportPeriod, setReportPeriod] = useState('bulanan');
   const [reportClass, setReportClass] = useState('7');
   const [reportSubject, setReportSubject] = useState('Matematika');
-  const [startDate, setStartDateFilter] = useState(new Date().toISOString().split('T')[0]);
-  const [endDate, setEndDateFilter] = useState(new Date().toISOString().split('T')[0]);
+  const [startDate, setStartDateFilter] = useState(getWitaDateString());
+  const [endDate, setEndDateFilter] = useState(getWitaDateString());
 
   // Modal State
   const [showPreviewModal, setShowPreviewModal] = useState(false);
@@ -179,6 +188,7 @@ function App() {
     setPhotoPreviews(previews);
   };
 
+  // EDIT JURNAL & BUKA NILAI REAL SISWA
   const handleStartEditJournal = async (journal) => {
     if (editingJournal?.id === journal.id) {
       setEditingJournal(null);
@@ -227,6 +237,7 @@ function App() {
     setFetchingHistory(false);
   };
 
+  // 🔥 FIX PASTI: SIMPAN REVISI NILAI TERPERBARUI
   const handleSaveFullJournal = async () => {
     if (!editingJournal) return;
     setSavingEdit(true);
@@ -254,10 +265,11 @@ function App() {
     for (const s of editStudentsList) {
       const scoreVal = editingJournal.grades[s.id];
       if (scoreVal !== undefined && scoreVal !== null && scoreVal !== '') {
+        const parsedScore = parseFloat(scoreVal);
         await supabase.from('grades').upsert([{
           journal_id: editingJournal.id,
           student_id: s.id,
-          score: parseFloat(scoreVal),
+          score: parsedScore,
           date: editingJournal.created_at
         }], { onConflict: 'journal_id,student_id' });
       } else {
@@ -265,7 +277,7 @@ function App() {
       }
     }
 
-    Toast.fire({ icon: 'success', title: 'Jurnal & Presensi Diperbarui!' });
+    Toast.fire({ icon: 'success', title: 'Jurnal & Nilai Berhasil Diperbarui!' });
     setEditingJournal(null);
     setSavingEdit(false);
     fetchJournalsHistory();
@@ -583,7 +595,7 @@ function App() {
     setShowPreviewModal(true);
   };
 
-  // 🔥 QUERY REAL DATA UNTUK EXPORT PDF (PRESENSI DIPECAH H / S / I / A SEPENUHNYA)
+  // 🔥 EXPORT DENGAN DESIMAL 2 ANGKA UNTUK RATA-RATA NILAI
   const handleTriggerExportPreview = async () => {
     setLoading(true);
     let targetStudents = [];
@@ -602,7 +614,6 @@ function App() {
       if (data) targetStudents = data;
     }
 
-    // Hitung Rentang Tanggal
     let fromDate = new Date();
     let toDate = new Date();
 
@@ -681,8 +692,9 @@ function App() {
 
       let gradeDisplay = '-';
       if (gradeList && gradeList.length > 0) {
-        const avg = (gradeList.reduce((a, b) => a + b, 0) / gradeList.length).toFixed(0);
-        gradeDisplay = avg;
+        const avg = gradeList.reduce((a, b) => a + b, 0) / gradeList.length;
+        // Format desimal 2 angka, hapus .00 jika bulat murni
+        gradeDisplay = Number.isInteger(avg) ? avg.toString() : avg.toFixed(2);
       }
 
       return {
@@ -865,9 +877,11 @@ function App() {
         {/* TAB 1: INPUT JURNAL */}
         {activeTab === 'input' && (
           <div className="space-y-4">
+            
+            {/* CARD 1: TANGGAL, KELAS & MAPEL */}
             <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm space-y-3">
               <div>
-                <label className="text-xs font-bold text-slate-500 block mb-1">Tanggal Mengajar</label>
+                <label className="text-xs font-bold text-slate-500 block mb-1">Tanggal Mengajar (GMT+8 WITA)</label>
                 <input 
                   type="date" 
                   className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700"
@@ -908,38 +922,9 @@ function App() {
                   </select>
                 </div>
               </div>
-
-              <div>
-                <label className="text-xs font-bold text-slate-500 block mb-1">Materi / Ringkasan Mengajar</label>
-                <textarea 
-                  className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs h-20"
-                  placeholder="Tuliskan materi pembelajaran hari ini..."
-                  value={material} onChange={e => setMaterial(e.target.value)}
-                />
-              </div>
-
-              <div>
-                <label className="text-xs font-bold text-slate-500 block mb-1">Foto Dokumentasi (Galeri / Kamera)</label>
-                <input 
-                  type="file" multiple accept="image/*"
-                  onChange={handlePhotoSelect}
-                  className="w-full text-xs text-slate-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-blue-50 file:text-blue-600"
-                />
-                
-                {photoPreviews.length > 0 && (
-                  <div className="mt-2 space-y-1">
-                    <p className="text-[10px] text-emerald-600 font-bold">✓ {photoPreviews.length} foto terpilih untuk di-upload:</p>
-                    <div className="flex gap-2 overflow-x-auto pb-1">
-                      {photoPreviews.map((url, i) => (
-                        <img key={i} src={url} alt="Preview Upload" className="w-14 h-14 object-cover rounded-xl border border-blue-300" />
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
             </div>
 
-            {/* Presensi Siswa */}
+            {/* CARD 2: PRESENSI & NILAI SISWA */}
             <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm space-y-3">
               <div className="flex justify-between items-center border-b pb-2">
                 <div className="flex items-center space-x-2">
@@ -994,6 +979,38 @@ function App() {
                   ))}
                 </div>
               )}
+            </div>
+
+            {/* 🔥 CARD 3: MATERI & FOTO DOKUMENTASI (PINDAH KE PALING BAWAH DAFTAR SISWA) */}
+            <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm space-y-3">
+              <div>
+                <label className="text-xs font-bold text-slate-500 block mb-1">Materi / Ringkasan Mengajar</label>
+                <textarea 
+                  className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs h-20"
+                  placeholder="Tuliskan materi pembelajaran hari ini..."
+                  value={material} onChange={e => setMaterial(e.target.value)}
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-500 block mb-1">Foto Dokumentasi (Galeri / Kamera)</label>
+                <input 
+                  type="file" multiple accept="image/*"
+                  onChange={handlePhotoSelect}
+                  className="w-full text-xs text-slate-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-blue-50 file:text-blue-600"
+                />
+                
+                {photoPreviews.length > 0 && (
+                  <div className="mt-2 space-y-1">
+                    <p className="text-[10px] text-emerald-600 font-bold">✓ {photoPreviews.length} foto terpilih untuk di-upload:</p>
+                    <div className="flex gap-2 overflow-x-auto pb-1">
+                      {photoPreviews.map((url, i) => (
+                        <img key={i} src={url} alt="Preview Upload" className="w-14 h-14 object-cover rounded-xl border border-blue-300" />
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
 
             <button 
@@ -1511,7 +1528,7 @@ function App() {
         </div>
       )}
 
-      {/* 🔥 MODAL PREVIEW DOKUMEN LAPORAN & CETAK SAVE AS PDF (TABEL DIPECAH H/S/I/A & ZEBRA STRIPING) */}
+      {/* MODAL PREVIEW DOKUMEN LAPORAN & CETAK SAVE AS PDF */}
       {showPreviewModal && previewData && (
         <div className="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-sm flex flex-col justify-between p-2 overflow-y-auto">
           <div className="no-print bg-white p-3 rounded-2xl flex justify-between items-center shadow-lg mb-3 sticky top-0 z-10 max-w-xl mx-auto w-full">
@@ -1577,7 +1594,7 @@ function App() {
                   <th rowSpan="2" className="border border-slate-900 p-1 w-8">NO</th>
                   <th rowSpan="2" className="border border-slate-900 p-1 text-left">{previewData.isIndividual ? 'TANGGAL' : 'NAMA LENGKAP SISWA'}</th>
                   <th colSpan="4" className="border border-slate-900 p-1">PRESENSI</th>
-                  <th rowSpan="2" className="border border-slate-900 p-1 w-14">{previewData.isIndividual ? 'CATATAN' : 'NILAI'}</th>
+                  <th rowSpan="2" className="border border-slate-900 p-1 w-16">{previewData.isIndividual ? 'CATATAN' : 'NILAI'}</th>
                 </tr>
                 <tr className="bg-slate-300 text-slate-900 font-black text-center text-[8pt]">
                   <th className="border border-slate-900 p-0.5 w-8 text-emerald-800 bg-emerald-100/60">H</th>
@@ -1593,12 +1610,10 @@ function App() {
                   </tr>
                 ) : (
                   previewData.rows.map((row, idx) => (
-                    /* 🔥 BARIS ZEBRA STRIPING (PUTIH vs ABU-ABU MUDA) */
                     <tr key={idx} className={idx % 2 === 1 ? 'bg-slate-100/80' : 'bg-white'}>
                       <td className="border border-slate-800 p-1 text-center font-medium">{row.no}</td>
                       <td className="border border-slate-800 p-1 font-bold uppercase">{row.name}</td>
                       
-                      {/* 🔥 PEWARNAAN TEKS KETAT PER KOLOM PRESENSI */}
                       <td className="border border-slate-800 p-1 text-center font-black text-emerald-700 bg-emerald-50/30">
                         {row.h > 0 ? row.h : '-'}
                       </td>
