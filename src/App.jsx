@@ -79,7 +79,7 @@ function App() {
   });
   const [isProfileOpen, setIsProfileOpen] = useState(false);
 
-  // Form State Jurnal Input
+  // Form State Jurnal Input (DEFAULT GMT+8 WITA)
   const [journalDate, setStartDateJournal] = useState(getWitaDateString());
   const [selectedClass, setSelectedClass] = useState('7');
   const [selectedSubject, setSelectedSubject] = useState('Matematika');
@@ -236,7 +236,7 @@ function App() {
     setFetchingHistory(false);
   };
 
-  // 🔥 FIX BAZOOKA: UPDATE/INSERT NILAI DENGAN QUERY EKSPLISIT
+  // 🔥 FAST BATCH EDITING (TANPA DELAY / TANPA LOOP NETWORK KAKU)
   const handleSaveFullJournal = async () => {
     if (!editingJournal) return;
     setSavingEdit(true);
@@ -253,58 +253,35 @@ function App() {
       return;
     }
 
-    // 2. Update Presensi
-    for (const s of editStudentsList) {
-      const statusVal = editingJournal.attendance[s.id] || 'Hadir';
-      const { data: existingAtt } = await supabase
-        .from('attendance')
-        .select('id')
-        .eq('journal_id', editingJournal.id)
-        .eq('student_id', s.id)
-        .maybeSingle();
+    // 2. Batch Delete & Re-insert Presensi
+    await supabase.from('attendance').delete().eq('journal_id', editingJournal.id);
+    const newAttRecords = editStudentsList.map(s => ({
+      journal_id: editingJournal.id,
+      student_id: s.id,
+      status: editingJournal.attendance[s.id] || 'Hadir',
+      date: editingJournal.created_at
+    }));
+    await supabase.from('attendance').insert(newAttRecords);
 
-      if (existingAtt) {
-        await supabase.from('attendance').update({ status: statusVal }).eq('id', existingAtt.id);
-      } else {
-        await supabase.from('attendance').insert([{
-          journal_id: editingJournal.id,
-          student_id: s.id,
-          status: statusVal,
-          date: editingJournal.created_at
-        }]);
-      }
-    }
-
-    // 3. Update / Insert Nilai Real
+    // 3. Batch Delete & Re-insert Nilai
+    await supabase.from('grades').delete().eq('journal_id', editingJournal.id);
+    const newGradeRecords = [];
     for (const s of editStudentsList) {
       const scoreVal = editingJournal.grades[s.id];
-      const { data: existingGrade } = await supabase
-        .from('grades')
-        .select('id')
-        .eq('journal_id', editingJournal.id)
-        .eq('student_id', s.id)
-        .maybeSingle();
-
       if (scoreVal !== undefined && scoreVal !== null && scoreVal !== '') {
-        const parsedScore = parseFloat(scoreVal);
-        if (existingGrade) {
-          await supabase.from('grades').update({ score: parsedScore }).eq('id', existingGrade.id);
-        } else {
-          await supabase.from('grades').insert([{
-            journal_id: editingJournal.id,
-            student_id: s.id,
-            score: parsedScore,
-            date: editingJournal.created_at
-          }]);
-        }
-      } else {
-        if (existingGrade) {
-          await supabase.from('grades').delete().eq('id', existingGrade.id);
-        }
+        newGradeRecords.push({
+          journal_id: editingJournal.id,
+          student_id: s.id,
+          score: parseFloat(scoreVal),
+          date: editingJournal.created_at
+        });
       }
     }
+    if (newGradeRecords.length > 0) {
+      await supabase.from('grades').insert(newGradeRecords);
+    }
 
-    Toast.fire({ icon: 'success', title: 'Jurnal & Nilai Tersimpan!' });
+    Toast.fire({ icon: 'success', title: 'Jurnal & Nilai Tersimpan Instan!' });
     setEditingJournal(null);
     setSavingEdit(false);
     fetchJournalsHistory();
@@ -817,10 +794,11 @@ function App() {
     }
   };
 
+  // 🔥 DESAIN HALAMAN LOGIN MODERN PUTIH/LIGHT NEUTRAL (Screenshot 232844)
   if (!session && !isDemo) {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-blue-700 to-indigo-900 flex items-center justify-center p-4 font-sans">
-        <div className="bg-white/95 backdrop-blur-lg p-8 rounded-3xl shadow-2xl w-full max-w-sm border border-white/20">
+      <div className="min-h-screen bg-slate-100 flex items-center justify-center p-4 font-sans">
+        <div className="bg-white p-8 rounded-3xl shadow-xl w-full max-w-sm border border-slate-200">
           <div className="text-center mb-6">
             <div className="bg-blue-50 p-3 rounded-2xl w-20 h-20 mx-auto flex items-center justify-center mb-3 shadow-inner">
               <img 
@@ -839,7 +817,7 @@ function App() {
               <label className="text-[11px] font-bold text-slate-600 uppercase block mb-1">Email / Username</label>
               <input 
                 type="email" placeholder="guru@smp.sch.id" 
-                className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500"
+                className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold focus:ring-2 focus:ring-blue-500"
                 value={email} onChange={e => setEmail(e.target.value)} required 
               />
             </div>
@@ -847,7 +825,7 @@ function App() {
               <label className="text-[11px] font-bold text-slate-600 uppercase block mb-1">Password</label>
               <input 
                 type="password" placeholder="••••••••" 
-                className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500"
+                className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold focus:ring-2 focus:ring-blue-500"
                 value={password} onChange={e => setPassword(e.target.value)} required 
               />
             </div>
@@ -859,8 +837,8 @@ function App() {
             <button 
               type="submit" 
               disabled={!!lockoutUntil}
-              className={`w-full text-white py-3.5 rounded-xl font-bold shadow-lg transition-all ${
-                lockoutUntil ? 'bg-slate-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700 shadow-blue-500/30'
+              className={`w-full text-white py-3.5 rounded-xl font-extrabold shadow-md transition-all ${
+                lockoutUntil ? 'bg-slate-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700 shadow-blue-500/20'
               }`}
             >
               {lockoutUntil ? 'Akses Diblokir (24 Jam)' : 'Masuk Aplikasi'}
@@ -1470,7 +1448,7 @@ function App() {
 
       </div>
 
-      {/* 🔥 FLOATING FOOTER NAVIGATION (5 TOMBOL DENGAN KELUAR/LOGOUT) */}
+      {/* FLOATING FOOTER NAVIGATION (5 TOMBOL UTAMA) */}
       <div className="no-print fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-white/95 backdrop-blur-md border-t border-slate-200 flex justify-around p-2 z-30 rounded-t-2xl shadow-lg">
         <button onClick={() => setActiveTab('input')} className={`p-2 flex flex-col items-center ${activeTab === 'input' ? 'text-blue-600 font-bold scale-105' : 'text-slate-400'}`}>
           <BookOpen className="w-5 h-5" />
@@ -1614,7 +1592,6 @@ function App() {
               {previewData.subtitle && <p className="text-[9pt] text-slate-700 font-sans mt-0.5">{previewData.subtitle}</p>}
             </div>
 
-            {/* TABEL H / S / I / A & ZEBRA STRIPING */}
             <table className="w-full border-collapse border border-slate-900 text-[8.5pt] font-sans">
               <thead>
                 <tr className="bg-slate-200 text-slate-900 font-bold text-center">
