@@ -4,7 +4,7 @@ import {
   BookOpen, FileText, LogOut, Check, UserCheck, 
   Search, Edit3, Image as ImageIcon, Users, RefreshCw,
   Plus, Trash, Edit, Save, X, Download, Eye, Printer, 
-  ChevronDown, ChevronUp, Settings, Calendar, ShieldAlert, Filter, AlertCircle
+  ChevronDown, ChevronUp, Settings, Calendar, ShieldAlert, Filter, AlertCircle, Camera
 } from 'lucide-react';
 
 /* Helper SweetAlert2 Bawaan CDN */
@@ -180,12 +180,24 @@ function App() {
     if (activeTab === 'siswa') fetchAllStudents();
   }, [activeTab]);
 
+  // AKUMULASI TAMBAH FOTO (BAIK DARI KAMERA MAUPUN GALERI)
   const handlePhotoSelect = (e) => {
     const files = Array.from(e.target.files);
-    setPhotos(files);
+    if (files.length === 0) return;
 
-    const previews = files.map(file => URL.createObjectURL(file));
-    setPhotoPreviews(previews);
+    const newFiles = [...photoFiles, ...files];
+    setPhotos(newFiles);
+
+    const newPreviews = newFiles.map(file => URL.createObjectURL(file));
+    setPhotoPreviews(newPreviews);
+  };
+
+  const handleRemovePhoto = (index) => {
+    const updatedFiles = photoFiles.filter((_, i) => i !== index);
+    setPhotos(updatedFiles);
+
+    const updatedPreviews = updatedFiles.map(file => URL.createObjectURL(file));
+    setPhotoPreviews(updatedPreviews);
   };
 
   const handleStartEditJournal = async (journal) => {
@@ -236,12 +248,10 @@ function App() {
     setFetchingHistory(false);
   };
 
-  // 🔥 FAST BATCH EDITING (TANPA DELAY / TANPA LOOP NETWORK KAKU)
   const handleSaveFullJournal = async () => {
     if (!editingJournal) return;
     setSavingEdit(true);
 
-    // 1. Update Materi Ringkasan
     const { error: jErr } = await supabase
       .from('journals')
       .update({ material: editingJournal.material })
@@ -253,7 +263,6 @@ function App() {
       return;
     }
 
-    // 2. Batch Delete & Re-insert Presensi
     await supabase.from('attendance').delete().eq('journal_id', editingJournal.id);
     const newAttRecords = editStudentsList.map(s => ({
       journal_id: editingJournal.id,
@@ -263,7 +272,6 @@ function App() {
     }));
     await supabase.from('attendance').insert(newAttRecords);
 
-    // 3. Batch Delete & Re-insert Nilai
     await supabase.from('grades').delete().eq('journal_id', editingJournal.id);
     const newGradeRecords = [];
     for (const s of editStudentsList) {
@@ -794,7 +802,6 @@ function App() {
     }
   };
 
-  // 🔥 DESAIN HALAMAN LOGIN MODERN PUTIH/LIGHT NEUTRAL (Screenshot 232844)
   if (!session && !isDemo) {
     return (
       <div className="min-h-screen bg-slate-100 flex items-center justify-center p-4 font-sans">
@@ -978,7 +985,7 @@ function App() {
               )}
             </div>
 
-            {/* CARD 3: MATERI & FOTO DOKUMENTASI */}
+            {/* 🔥 CARD 3: MATERI & DOKUMENTASI (PILIHAN DUA TOMBOL: KAMERA VS GALERI) */}
             <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm space-y-3">
               <div>
                 <label className="text-xs font-bold text-slate-500 block mb-1">Materi / Ringkasan Mengajar</label>
@@ -990,19 +997,51 @@ function App() {
               </div>
 
               <div>
-                <label className="text-xs font-bold text-slate-500 block mb-1">Foto Dokumentasi (Galeri / Kamera)</label>
-                <input 
-                  type="file" multiple accept="image/*"
-                  onChange={handlePhotoSelect}
-                  className="w-full text-xs text-slate-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-blue-50 file:text-blue-600"
-                />
+                <label className="text-xs font-bold text-slate-500 block mb-2">Foto Dokumentasi Pembelajaran</label>
                 
+                {/* 📸 DUA TOMBOL KHUSUS KAMERA DAN GALERI */}
+                <div className="grid grid-cols-2 gap-2 mb-2">
+                  <label className="bg-blue-50 border border-blue-200 hover:bg-blue-100 text-blue-700 py-2.5 px-3 rounded-xl text-xs font-bold flex items-center justify-center space-x-1.5 cursor-pointer active:scale-95 transition-all">
+                    <Camera className="w-4 h-4 text-blue-600" />
+                    <span>Ambil Foto</span>
+                    <input 
+                      type="file" 
+                      accept="image/*" 
+                      capture="environment" 
+                      onChange={handlePhotoSelect} 
+                      className="hidden" 
+                    />
+                  </label>
+
+                  <label className="bg-slate-50 border border-slate-200 hover:bg-slate-100 text-slate-700 py-2.5 px-3 rounded-xl text-xs font-bold flex items-center justify-center space-x-1.5 cursor-pointer active:scale-95 transition-all">
+                    <ImageIcon className="w-4 h-4 text-slate-600" />
+                    <span>Pilih Galeri</span>
+                    <input 
+                      type="file" 
+                      multiple 
+                      accept="image/*" 
+                      onChange={handlePhotoSelect} 
+                      className="hidden" 
+                    />
+                  </label>
+                </div>
+
+                {/* THUMBNAIL FOTO TERPILIH DENGAN TOMBOL HAPUS (X) */}
                 {photoPreviews.length > 0 && (
-                  <div className="mt-2 space-y-1">
-                    <p className="text-[10px] text-emerald-600 font-bold">✓ {photoPreviews.length} foto terpilih untuk di-upload:</p>
+                  <div className="mt-2 space-y-1.5 bg-slate-50 p-2.5 rounded-xl border border-slate-200">
+                    <p className="text-[10px] text-emerald-600 font-bold">✓ {photoPreviews.length} foto terlampir:</p>
                     <div className="flex gap-2 overflow-x-auto pb-1">
                       {photoPreviews.map((url, i) => (
-                        <img key={i} src={url} alt="Preview Upload" className="w-14 h-14 object-cover rounded-xl border border-blue-300" />
+                        <div key={i} className="relative flex-shrink-0">
+                          <img src={url} alt="Preview Upload" className="w-16 h-16 object-cover rounded-xl border border-blue-300 shadow-sm" />
+                          <button 
+                            onClick={() => handleRemovePhoto(i)}
+                            className="absolute -top-1.5 -right-1.5 bg-red-500 text-white p-0.5 rounded-full shadow"
+                            title="Hapus foto ini"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        </div>
                       ))}
                     </div>
                   </div>
@@ -1448,7 +1487,7 @@ function App() {
 
       </div>
 
-      {/* FLOATING FOOTER NAVIGATION (5 TOMBOL UTAMA) */}
+      {/* FLOATING FOOTER NAVIGATION */}
       <div className="no-print fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-white/95 backdrop-blur-md border-t border-slate-200 flex justify-around p-2 z-30 rounded-t-2xl shadow-lg">
         <button onClick={() => setActiveTab('input')} className={`p-2 flex flex-col items-center ${activeTab === 'input' ? 'text-blue-600 font-bold scale-105' : 'text-slate-400'}`}>
           <BookOpen className="w-5 h-5" />
