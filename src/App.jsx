@@ -21,7 +21,7 @@ const Toast = Swal.mixin({
   timerProgressBar: true
 });
 
-// HELPER ZONA WAKTU LOKAL GMT+8 (WITA) BIAR GAK MUNDUR KE KEMARIN PAS PAGI
+// HELPER ZONA WAKTU LOKAL GMT+8 (WITA)
 const getWitaDateString = (dateObj = new Date()) => {
   const witaTime = new Date(dateObj.toLocaleString('en-US', { timeZone: 'Asia/Makassar' }));
   const year = witaTime.getFullYear();
@@ -79,7 +79,7 @@ function App() {
   });
   const [isProfileOpen, setIsProfileOpen] = useState(false);
 
-  // Form State Jurnal Input (DEFAULT GMT+8 WITA)
+  // Form State Jurnal Input
   const [journalDate, setStartDateJournal] = useState(getWitaDateString());
   const [selectedClass, setSelectedClass] = useState('7');
   const [selectedSubject, setSelectedSubject] = useState('Matematika');
@@ -92,7 +92,7 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [fetchingStudents, setFetchingStudents] = useState(false);
 
-  // Filter Rekap Laporan (Tab Export)
+  // Filter Rekap Laporan
   const [reportPeriod, setReportPeriod] = useState('bulanan');
   const [reportClass, setReportClass] = useState('7');
   const [reportSubject, setReportSubject] = useState('Matematika');
@@ -188,7 +188,6 @@ function App() {
     setPhotoPreviews(previews);
   };
 
-  // EDIT JURNAL & BUKA NILAI REAL SISWA
   const handleStartEditJournal = async (journal) => {
     if (editingJournal?.id === journal.id) {
       setEditingJournal(null);
@@ -237,11 +236,12 @@ function App() {
     setFetchingHistory(false);
   };
 
-  // 🔥 FIX PASTI: SIMPAN REVISI NILAI TERPERBARUI
+  // 🔥 FIX BAZOOKA: UPDATE/INSERT NILAI DENGAN QUERY EKSPLISIT
   const handleSaveFullJournal = async () => {
     if (!editingJournal) return;
     setSavingEdit(true);
 
+    // 1. Update Materi Ringkasan
     const { error: jErr } = await supabase
       .from('journals')
       .update({ material: editingJournal.material })
@@ -253,31 +253,58 @@ function App() {
       return;
     }
 
-    const attRecords = editStudentsList.map(s => ({
-      journal_id: editingJournal.id,
-      student_id: s.id,
-      status: editingJournal.attendance[s.id] || 'Hadir',
-      date: editingJournal.created_at
-    }));
-
-    await supabase.from('attendance').upsert(attRecords, { onConflict: 'journal_id,student_id' });
-
+    // 2. Update Presensi
     for (const s of editStudentsList) {
-      const scoreVal = editingJournal.grades[s.id];
-      if (scoreVal !== undefined && scoreVal !== null && scoreVal !== '') {
-        const parsedScore = parseFloat(scoreVal);
-        await supabase.from('grades').upsert([{
+      const statusVal = editingJournal.attendance[s.id] || 'Hadir';
+      const { data: existingAtt } = await supabase
+        .from('attendance')
+        .select('id')
+        .eq('journal_id', editingJournal.id)
+        .eq('student_id', s.id)
+        .maybeSingle();
+
+      if (existingAtt) {
+        await supabase.from('attendance').update({ status: statusVal }).eq('id', existingAtt.id);
+      } else {
+        await supabase.from('attendance').insert([{
           journal_id: editingJournal.id,
           student_id: s.id,
-          score: parsedScore,
+          status: statusVal,
           date: editingJournal.created_at
-        }], { onConflict: 'journal_id,student_id' });
-      } else {
-        await supabase.from('grades').delete().match({ journal_id: editingJournal.id, student_id: s.id });
+        }]);
       }
     }
 
-    Toast.fire({ icon: 'success', title: 'Jurnal & Nilai Berhasil Diperbarui!' });
+    // 3. Update / Insert Nilai Real
+    for (const s of editStudentsList) {
+      const scoreVal = editingJournal.grades[s.id];
+      const { data: existingGrade } = await supabase
+        .from('grades')
+        .select('id')
+        .eq('journal_id', editingJournal.id)
+        .eq('student_id', s.id)
+        .maybeSingle();
+
+      if (scoreVal !== undefined && scoreVal !== null && scoreVal !== '') {
+        const parsedScore = parseFloat(scoreVal);
+        if (existingGrade) {
+          await supabase.from('grades').update({ score: parsedScore }).eq('id', existingGrade.id);
+        } else {
+          await supabase.from('grades').insert([{
+            journal_id: editingJournal.id,
+            student_id: s.id,
+            score: parsedScore,
+            date: editingJournal.created_at
+          }]);
+        }
+      } else {
+        if (existingGrade) {
+          await supabase.from('grades').delete().eq('id', existingGrade.id);
+        }
+      }
+    }
+
+    Toast.fire({ icon: 'success', title: 'Jurnal & Nilai Tersimpan!' });
     setEditingJournal(null);
     setSavingEdit(false);
     fetchJournalsHistory();
@@ -305,6 +332,25 @@ function App() {
         } else {
           Toast.fire({ icon: 'error', title: 'Gagal menghapus jurnal' });
         }
+      }
+    });
+  };
+
+  const handleLogout = () => {
+    Swal.fire({
+      title: 'Keluar Aplikasi?',
+      text: 'Kamu akan keluar dari akun Bel Ajar.',
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonColor: '#ef4444',
+      cancelButtonColor: '#64748b',
+      confirmButtonText: 'Ya, Keluar',
+      cancelButtonText: 'Batal'
+    }).then((res) => {
+      if (res.isConfirmed) {
+        supabase.auth.signOut();
+        setIsDemo(false);
+        Toast.fire({ icon: 'success', title: 'Berhasil Keluar' });
       }
     });
   };
@@ -595,7 +641,6 @@ function App() {
     setShowPreviewModal(true);
   };
 
-  // 🔥 EXPORT DENGAN DESIMAL 2 ANGKA UNTUK RATA-RATA NILAI
   const handleTriggerExportPreview = async () => {
     setLoading(true);
     let targetStudents = [];
@@ -685,7 +730,6 @@ function App() {
       }
     }
 
-    // Susun Struktur Baris Terpisah H, S, I, A
     const rows = targetStudents.map((s, idx) => {
       const attInfo = attSummaryMap[s.id] || { H: 0, S: 0, I: 0, A: 0 };
       const gradeList = gradeSummaryMap[s.id];
@@ -693,7 +737,6 @@ function App() {
       let gradeDisplay = '-';
       if (gradeList && gradeList.length > 0) {
         const avg = gradeList.reduce((a, b) => a + b, 0) / gradeList.length;
-        // Format desimal 2 angka, hapus .00 jika bulat murni
         gradeDisplay = Number.isInteger(avg) ? avg.toString() : avg.toFixed(2);
       }
 
@@ -845,31 +888,7 @@ function App() {
   });
 
   return (
-    <div className="min-h-screen bg-slate-100 pb-24 max-w-md mx-auto relative shadow-2xl border-x border-slate-200 font-sans">
-      
-      {/* Top Mobile Bar */}
-      <div className="no-print bg-blue-600 text-white p-4 sticky top-0 z-30 shadow-md rounded-b-2xl flex justify-between items-center">
-        <div className="flex items-center space-x-3">
-          <img 
-            src="/logo.png" 
-            alt="Bel Ajar" 
-            onError={(e) => { e.target.onerror = null; e.target.src = 'https://cdn-icons-png.flaticon.com/512/3429/3429149.png'; }} 
-            className="w-9 h-9 object-contain bg-white rounded-xl p-1"
-          />
-          <div>
-            <h2 className="font-black text-lg tracking-tight leading-tight">Bel Ajar</h2>
-            <p className="text-[10px] text-blue-100">
-              {isDemo ? '⚠️ Mode Demo' : `👤 ${profile.full_name || 'Guru SMP'}`}
-            </p>
-          </div>
-        </div>
-        <button 
-          onClick={() => { supabase.auth.signOut(); setIsDemo(false); }} 
-          className="bg-white/10 p-2 rounded-xl hover:bg-white/20 transition-all"
-        >
-          <LogOut className="w-4 h-4 text-white" />
-        </button>
-      </div>
+    <div className="min-h-screen bg-slate-100 pb-24 max-w-md mx-auto relative shadow-2xl border-x border-slate-200 font-sans pt-2">
 
       {/* Main Content */}
       <div className="no-print p-4 space-y-4">
@@ -981,7 +1000,7 @@ function App() {
               )}
             </div>
 
-            {/* 🔥 CARD 3: MATERI & FOTO DOKUMENTASI (PINDAH KE PALING BAWAH DAFTAR SISWA) */}
+            {/* CARD 3: MATERI & FOTO DOKUMENTASI */}
             <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm space-y-3">
               <div>
                 <label className="text-xs font-bold text-slate-500 block mb-1">Materi / Ringkasan Mengajar</label>
@@ -1115,8 +1134,8 @@ function App() {
                                   <input 
                                     type="number" 
                                     placeholder="Nilai" 
-                                    className="w-11 text-xs p-1 border rounded-lg text-center font-bold bg-white"
-                                    value={editingJournal.grades[student.id] || ''}
+                                    className="w-12 text-xs p-1 border border-slate-300 rounded-lg text-center font-bold bg-white focus:ring-1 focus:ring-blue-500"
+                                    value={editingJournal.grades[student.id] !== undefined ? editingJournal.grades[student.id] : ''}
                                     onChange={e => setEditingJournal({
                                       ...editingJournal,
                                       grades: { ...editingJournal.grades, [student.id]: e.target.value }
@@ -1451,23 +1470,31 @@ function App() {
 
       </div>
 
-      {/* FLOATING FOOTER NAVIGATION */}
+      {/* 🔥 FLOATING FOOTER NAVIGATION (5 TOMBOL DENGAN KELUAR/LOGOUT) */}
       <div className="no-print fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-white/95 backdrop-blur-md border-t border-slate-200 flex justify-around p-2 z-30 rounded-t-2xl shadow-lg">
         <button onClick={() => setActiveTab('input')} className={`p-2 flex flex-col items-center ${activeTab === 'input' ? 'text-blue-600 font-bold scale-105' : 'text-slate-400'}`}>
           <BookOpen className="w-5 h-5" />
           <span className="text-[10px] mt-1">Jurnal</span>
         </button>
+
         <button onClick={() => setActiveTab('edit')} className={`p-2 flex flex-col items-center ${activeTab === 'edit' ? 'text-blue-600 font-bold scale-105' : 'text-slate-400'}`}>
           <Edit3 className="w-5 h-5" />
           <span className="text-[10px] mt-1">Review</span>
         </button>
+
         <button onClick={() => setActiveTab('siswa')} className={`p-2 flex flex-col items-center ${activeTab === 'siswa' ? 'text-blue-600 font-bold scale-105' : 'text-slate-400'}`}>
           <Users className="w-5 h-5" />
           <span className="text-[10px] mt-1">Siswa</span>
         </button>
+
         <button onClick={() => setActiveTab('profile')} className={`p-2 flex flex-col items-center ${activeTab === 'profile' ? 'text-blue-600 font-bold scale-105' : 'text-slate-400'}`}>
           <FileText className="w-5 h-5" />
           <span className="text-[10px] mt-1">Export</span>
+        </button>
+
+        <button onClick={handleLogout} className="p-2 flex flex-col items-center text-red-500 hover:text-red-700 active:scale-95 transition-all">
+          <LogOut className="w-5 h-5" />
+          <span className="text-[10px] mt-1 font-semibold">Keluar</span>
         </button>
       </div>
 
@@ -1587,7 +1614,7 @@ function App() {
               {previewData.subtitle && <p className="text-[9pt] text-slate-700 font-sans mt-0.5">{previewData.subtitle}</p>}
             </div>
 
-            {/* TABEL DENGAN PERBEDAAN WARNA H/S/I/A & BARIS ZEBRA STRIPING */}
+            {/* TABEL H / S / I / A & ZEBRA STRIPING */}
             <table className="w-full border-collapse border border-slate-900 text-[8.5pt] font-sans">
               <thead>
                 <tr className="bg-slate-200 text-slate-900 font-bold text-center">
