@@ -559,12 +559,15 @@ function App() {
       else if (a.status === 'Alfa') summary.A++;
     });
 
-    const rows = studentAtt.map((a, idx) => [
-      idx + 1,
-      new Date(a.date).toLocaleDateString('id-ID'),
-      a.status,
-      a.notes || '-'
-    ]);
+    const rows = studentAtt.map((a, idx) => ({
+      no: idx + 1,
+      name: new Date(a.date).toLocaleDateString('id-ID'),
+      h: a.status === 'Hadir' ? 1 : 0,
+      s: a.status === 'Sakit' ? 1 : 0,
+      i: a.status === 'Izin' ? 1 : 0,
+      a: a.status === 'Alfa' ? 1 : 0,
+      grade: a.notes || '-'
+    }));
 
     setPreviewData({
       title: `REKAP PRESENSI INDIVIDUAL SISWA`,
@@ -572,7 +575,7 @@ function App() {
       subjectRole: `Guru Mata Pelajaran Kelas ${student.class_name}`,
       isIndividual: true,
       summary,
-      rows: rows.length > 0 ? rows : [],
+      rows,
       teacherName: profile.full_name || 'NUR ALFI SYAHRI, S.P.',
       teacherNip: profile.nip || '-------------------',
       signatureUrl: profile.signature_url
@@ -580,7 +583,7 @@ function App() {
     setShowPreviewModal(true);
   };
 
-  // 🔥 QUERY DATA PRESENSI & NILAI REAL DARI DATABASE UNTUK TAB EXPORT
+  // 🔥 QUERY REAL DATA UNTUK EXPORT PDF (PRESENSI DIPECAH H / S / I / A SEPENUHNYA)
   const handleTriggerExportPreview = async () => {
     setLoading(true);
     let targetStudents = [];
@@ -599,7 +602,7 @@ function App() {
       if (data) targetStudents = data;
     }
 
-    // Hitung Rentang Tanggal Secara Presisi
+    // Hitung Rentang Tanggal
     let fromDate = new Date();
     let toDate = new Date();
 
@@ -629,7 +632,6 @@ function App() {
     let gradeSummaryMap = {};
 
     if (!isDemo && targetStudents.length > 0) {
-      // 1. Query Jurnal di kelas & mapel pilihan
       const { data: matchedJournals } = await supabase
         .from('journals')
         .select('id, created_at')
@@ -641,13 +643,11 @@ function App() {
       if (matchedJournals && matchedJournals.length > 0) {
         const journalIds = matchedJournals.map(j => j.id);
 
-        // 2. Fetch Presensi Real
         const { data: attData } = await supabase
           .from('attendance')
           .select('student_id, status')
           .in('journal_id', journalIds);
 
-        // 3. Fetch Nilai Real
         const { data: gradeData } = await supabase
           .from('grades')
           .select('student_id, score')
@@ -656,13 +656,12 @@ function App() {
         if (attData) {
           attData.forEach(a => {
             if (!attSummaryMap[a.student_id]) {
-              attSummaryMap[a.student_id] = { H: 0, S: 0, I: 0, A: 0, lastStatus: a.status };
+              attSummaryMap[a.student_id] = { H: 0, S: 0, I: 0, A: 0 };
             }
             if (a.status === 'Hadir') attSummaryMap[a.student_id].H++;
             else if (a.status === 'Sakit') attSummaryMap[a.student_id].S++;
             else if (a.status === 'Izin') attSummaryMap[a.student_id].I++;
             else if (a.status === 'Alfa') attSummaryMap[a.student_id].A++;
-            attSummaryMap[a.student_id].lastStatus = a.status;
           });
         }
 
@@ -675,26 +674,10 @@ function App() {
       }
     }
 
-    // Susun Baris Laporan
+    // Susun Struktur Baris Terpisah H, S, I, A
     const rows = targetStudents.map((s, idx) => {
-      const attInfo = attSummaryMap[s.id];
+      const attInfo = attSummaryMap[s.id] || { H: 0, S: 0, I: 0, A: 0 };
       const gradeList = gradeSummaryMap[s.id];
-
-      let attDisplay = '-';
-      if (attInfo) {
-        if (reportPeriod === 'harian') {
-          attDisplay = attInfo.lastStatus || '-';
-        } else {
-          const totalMeetings = attInfo.H + attInfo.S + attInfo.I + attInfo.A;
-          if (totalMeetings > 0) {
-            if (totalMeetings === attInfo.H) {
-              attDisplay = `Hadir (${attInfo.H}x)`;
-            } else {
-              attDisplay = `H:${attInfo.H} S:${attInfo.S} I:${attInfo.I} A:${attInfo.A}`;
-            }
-          }
-        }
-      }
 
       let gradeDisplay = '-';
       if (gradeList && gradeList.length > 0) {
@@ -702,12 +685,15 @@ function App() {
         gradeDisplay = avg;
       }
 
-      return [
-        idx + 1,
-        s.name,
-        attDisplay,
-        gradeDisplay
-      ];
+      return {
+        no: idx + 1,
+        name: s.name,
+        h: attInfo.H,
+        s: attInfo.S,
+        i: attInfo.I,
+        a: attInfo.A,
+        grade: gradeDisplay
+      };
     });
 
     handleOpenPrintPreview(
@@ -1376,7 +1362,6 @@ function App() {
                 </div>
               )}
 
-              {/* 🔥 FIX PASTI: MANGGIL FUNGSI handleTriggerExportPreview */}
               <button 
                 onClick={handleTriggerExportPreview} disabled={loading}
                 className="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-3 rounded-xl font-bold text-xs flex items-center justify-center space-x-2 transition-all shadow"
@@ -1526,7 +1511,7 @@ function App() {
         </div>
       )}
 
-      {/* MODAL PREVIEW DOKUMEN LAPORAN & CETAK SAVE AS PDF */}
+      {/* 🔥 MODAL PREVIEW DOKUMEN LAPORAN & CETAK SAVE AS PDF (TABEL DIPECAH H/S/I/A & ZEBRA STRIPING) */}
       {showPreviewModal && previewData && (
         <div className="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-sm flex flex-col justify-between p-2 overflow-y-auto">
           <div className="no-print bg-white p-3 rounded-2xl flex justify-between items-center shadow-lg mb-3 sticky top-0 z-10 max-w-xl mx-auto w-full">
@@ -1548,6 +1533,8 @@ function App() {
           </div>
 
           <div className="print-document bg-white p-6 rounded-xl text-slate-900 font-serif shadow-2xl mx-auto w-full max-w-xl text-[9.5pt] leading-tight">
+            
+            {/* KOP SURAT */}
             <div className="flex items-center justify-between gap-3 mb-1">
               <img 
                 src="/logo-kubar.png" 
@@ -1583,42 +1570,56 @@ function App() {
               {previewData.subtitle && <p className="text-[9pt] text-slate-700 font-sans mt-0.5">{previewData.subtitle}</p>}
             </div>
 
-            {previewData.isIndividual && previewData.summary && (
-              <div className="mb-3 font-sans text-[8.5pt] bg-slate-50 p-2 rounded-lg border border-slate-300 flex justify-around font-bold">
-                <span className="text-emerald-700">Hadir (H): {previewData.summary.H}</span>
-                <span className="text-amber-700">Sakit (S): {previewData.summary.S}</span>
-                <span className="text-blue-700">Izin (I): {previewData.summary.I}</span>
-                <span className="text-red-700">Alfa (A): {previewData.summary.A}</span>
-              </div>
-            )}
-
+            {/* TABEL DENGAN PERBEDAAN WARNA H/S/I/A & BARIS ZEBRA STRIPING */}
             <table className="w-full border-collapse border border-slate-900 text-[8.5pt] font-sans">
               <thead>
                 <tr className="bg-slate-200 text-slate-900 font-bold text-center">
-                  <th className="border border-slate-900 p-1 w-10">NO</th>
-                  <th className="border border-slate-900 p-1 text-left">{previewData.isIndividual ? 'TANGGAL' : 'NAMA LENGKAP SISWA'}</th>
-                  <th className="border border-slate-900 p-1 w-28">STATUS PRESENSI</th>
-                  <th className="border border-slate-900 p-1 w-20">{previewData.isIndividual ? 'CATATAN' : 'NILAI'}</th>
+                  <th rowSpan="2" className="border border-slate-900 p-1 w-8">NO</th>
+                  <th rowSpan="2" className="border border-slate-900 p-1 text-left">{previewData.isIndividual ? 'TANGGAL' : 'NAMA LENGKAP SISWA'}</th>
+                  <th colSpan="4" className="border border-slate-900 p-1">PRESENSI</th>
+                  <th rowSpan="2" className="border border-slate-900 p-1 w-14">{previewData.isIndividual ? 'CATATAN' : 'NILAI'}</th>
+                </tr>
+                <tr className="bg-slate-300 text-slate-900 font-black text-center text-[8pt]">
+                  <th className="border border-slate-900 p-0.5 w-8 text-emerald-800 bg-emerald-100/60">H</th>
+                  <th className="border border-slate-900 p-0.5 w-8 text-amber-800 bg-amber-100/60">S</th>
+                  <th className="border border-slate-900 p-0.5 w-8 text-blue-800 bg-blue-100/60">I</th>
+                  <th className="border border-slate-900 p-0.5 w-8 text-red-800 bg-red-100/60">A</th>
                 </tr>
               </thead>
               <tbody>
                 {previewData.rows.length === 0 ? (
                   <tr>
-                    <td colSpan="4" className="border border-slate-800 p-3 text-center text-slate-400 italic">Belum ada riwayat data presensi.</td>
+                    <td colSpan="7" className="border border-slate-800 p-3 text-center text-slate-400 italic">Belum ada riwayat data presensi.</td>
                   </tr>
                 ) : (
                   previewData.rows.map((row, idx) => (
-                    <tr key={idx} className={idx % 2 === 1 ? 'bg-slate-50' : 'bg-white'}>
-                      <td className="border border-slate-800 p-1 text-center font-medium">{row[0]}</td>
-                      <td className="border border-slate-800 p-1 font-bold">{row[1]}</td>
-                      <td className={`border border-slate-800 p-1 text-center font-bold ${row[2] === 'Hadir' || row[2].startsWith('Hadir') ? 'text-emerald-700' : 'text-slate-800'}`}>{row[2]}</td>
-                      <td className="border border-slate-800 p-1 text-center font-medium">{row[3]}</td>
+                    /* 🔥 BARIS ZEBRA STRIPING (PUTIH vs ABU-ABU MUDA) */
+                    <tr key={idx} className={idx % 2 === 1 ? 'bg-slate-100/80' : 'bg-white'}>
+                      <td className="border border-slate-800 p-1 text-center font-medium">{row.no}</td>
+                      <td className="border border-slate-800 p-1 font-bold uppercase">{row.name}</td>
+                      
+                      {/* 🔥 PEWARNAAN TEKS KETAT PER KOLOM PRESENSI */}
+                      <td className="border border-slate-800 p-1 text-center font-black text-emerald-700 bg-emerald-50/30">
+                        {row.h > 0 ? row.h : '-'}
+                      </td>
+                      <td className="border border-slate-800 p-1 text-center font-black text-amber-700 bg-amber-50/30">
+                        {row.s > 0 ? row.s : '-'}
+                      </td>
+                      <td className="border border-slate-800 p-1 text-center font-black text-blue-700 bg-blue-50/30">
+                        {row.i > 0 ? row.i : '-'}
+                      </td>
+                      <td className="border border-slate-800 p-1 text-center font-black text-red-700 bg-red-50/30">
+                        {row.a > 0 ? row.a : '-'}
+                      </td>
+
+                      <td className="border border-slate-800 p-1 text-center font-bold text-slate-800">{row.grade}</td>
                     </tr>
                   ))
                 )}
               </tbody>
             </table>
 
+            {/* AREA TTD GURU */}
             <div className="mt-5 flex justify-end font-sans">
               <div className="w-56 text-left text-[9pt]">
                 <p>Damai, {new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
